@@ -1,0 +1,5 @@
+(library
+  (name treewrite_lib)
+  (libraries core core_unix ppxlib core_kernel.nonempty_list)
+  (preprocess (pps ppx_jane ppxlib.traverse))
+  )
