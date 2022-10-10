@@ -48,12 +48,15 @@ module Type_id = struct
     | External of External_type_id.t
     | Defined of Defined_type_id.t
   [@@deriving sexp]
+
+  let all_external_types = function
+    | External id -> External_type_id.Set.singleton id
+    | Defined _ -> External_type_id.Set.empty
 end
 
 module External_type_descriptor = struct
   type t =
-    { id : External_type_id.t
-    ; parameter_count : int
+    { parameter_count : int
     ; fully_qualified_name : Longident.t
     } [@@deriving sexp]
 
@@ -75,12 +78,31 @@ module Module_name = struct
   include String_id.Make(struct let module_name = "Module_name" end)()
 end
 
+module Language_name = struct
+  include String_id.Make(struct let module_name = "Language_name" end)()
+
+  let to_variable_name t = String.lowercase (to_string t)
+  let to_module_name t = Module_name.of_string (String.capitalize (to_string t))
+end
+
 module Defined_type_name = struct
   module T = struct
     type t = Module_name.t Nonempty_list.t [@@deriving sexp, compare]
   end
   include T
   include Comparable.Make(T)
+
+  let ident_in_language t language_name =
+    let module_path_rev =
+      Nonempty_list.to_list t
+      |> List.rev_map ~f:(Module_name.to_string)
+    in
+    "t"
+    ::
+    (Language_name.to_module_name language_name
+     |> Module_name.to_string)
+    :: module_path_rev
+    |> Longident.of_list_rev
 end
 
 module Type_instance = struct
@@ -88,6 +110,8 @@ module Type_instance = struct
     { id : Type_id.t
     ; parameters : t list (* Parameters must be instantiated for now *)
     } [@@deriving sexp]
+
+  let all_external_types t = Type_id.all_external_types t.id
 end
 
 module Record_label = struct
@@ -103,6 +127,17 @@ module Type_shape = struct
     | Record of (Record_label.t * Type_instance.t) list
     | Variant of (Constructor_name.t * Type_instance.t) list
   [@@deriving sexp]
+
+  let all_external_types t =
+    let gather =
+      List.fold ~init:External_type_id.Set.empty
+        ~f:(fun acc (_,instance) ->
+            Set.union acc (Type_instance.all_external_types instance)
+          )
+    in
+    match t with
+    | Record r -> gather r
+    | Variant v -> gather v
 end
   
 module Defined_type_description = struct
@@ -113,16 +148,196 @@ module Defined_type_description = struct
     } [@@deriving sexp]
 end
 
-module Language_name = struct
-  include String_id.Make(struct let module_name = "Language_name" end)()
-end
-
 module Language_definition = struct
   type t =
     { name : Language_name.t
     ; types_by_name : Defined_type_id.t Defined_type_name.Map.t
     ; types_by_id : Type_shape.t Defined_type_id.Map.t
-    } [@@deriving sexp]
+    } [@@deriving sexp, fields]
 
-  let all_constructors
+  let all_external_types t : External_type_id.Set.t =
+    Fields.Direct.fold t
+      ~init:External_type_id.Set.empty
+      ~name:(fun acc _ _ _ -> acc)
+      ~types_by_name:(fun acc _ _ _ -> acc)
+      ~types_by_id:(fun acc _ _ defined_types ->
+          Map.fold ~init:acc defined_types
+            ~f:(fun ~key:_ ~data:type_shape acc ->
+                Set.union acc (Type_shape.all_external_types type_shape)
+              )
+        )
+
+  let all_constructor_descriptions t =
+    Map.filter_map t.types_by_name
+      ~f:(fun id ->
+          match Map.find_exn t.types_by_id id with
+          | Record _ -> None
+          | Variant constructors -> 
+            Some (Constructor_name.Map.of_alist_exn constructors)
+        )
 end
+
+module Transposer = struct
+
+  let map2 (type ka kb v ca cb)
+      ~empty
+      (x : (ka, (kb,v,cb) Map.t, ca) Map.t) 
+    : (kb, (ka,v,ca) Map.t, cb) Map.t
+    =
+    let comparator_outer = Map.comparator_s x in
+    let comparator_inner = Map.comparator_s empty in
+    Map.fold x
+      ~init:(Map.empty comparator_inner)
+      ~f:(fun ~key:key_outer ~data acc ->
+          Map.fold data ~init:acc ~f:(fun ~key:key_inner ~data acc ->
+              let new_map =
+                match Map.find acc key_inner with
+                | None -> Map.singleton comparator_outer key_outer data
+                | Some map -> Map.add_exn map ~key:key_outer ~data
+              in
+              Map.set acc ~key:key_inner ~data:new_map
+            )
+        )
+
+  let map3 (type ka kb kc v ca cb cc)
+      ~empty2
+      ~empty3
+      (x : (ka, (kb,(kc,v,cc) Map.t,cb) Map.t, ca) Map.t)
+    : (kc, (kb,(ka,v,ca) Map.t,cb) Map.t, cc) Map.t
+    =
+    let comparator_inner = Map.comparator_s empty3 in
+    let comparator_middle = Map.comparator_s empty2 in
+    let comparator_outer = Map.comparator_s x in
+    Map.fold x
+      ~init:(Map.empty comparator_inner)
+      ~f:(fun ~key:key_outer ~data acc ->
+          Map.fold data ~init:acc ~f:(fun ~key:key_middle ~data acc ->
+              Map.fold data ~init:acc ~f:(fun ~key:key_inner ~data acc ->
+                  let new_map =
+                    match Map.find acc key_inner with
+                    | None ->
+                      let data = Map.singleton comparator_outer key_outer data in
+                      Map.singleton comparator_middle key_middle data
+                    | Some map ->
+                      let new_map =
+                        match Map.find map key_middle with
+                        | None -> Map.singleton comparator_outer key_outer data
+                        | Some map -> Map.add_exn map ~key:key_outer ~data
+                      in
+                      Map.set map ~key:key_middle ~data:new_map
+                  in
+                  Map.set acc ~key:key_inner ~data:new_map
+                )
+            )
+        )
+
+  type (_,_) sel3 =
+    | S1 : (('a * _ * _), 'a) sel3
+    | S2 : ((_ * 'a * _), 'a) sel3
+    | S3 : ((_ * _ * 'a), 'a) sel3
+
+  let sel3_fst
+    (type a b c r x0 x1 x2 r')
+    (selector : ((a * x0) * (b * x1) * (c * x2), (r * r')) sel3)
+    ((a,b,c) : (a * b * c))
+    : r
+    =
+    match selector with
+    | S1 -> a
+    | S2 -> b
+    | S3 -> c
+
+  let sel3_cmp
+      (type a b c r a' b' c' r')
+      (selector : ((a * a') * (b * b') * (c * c'), (r * r')) sel3)
+      ((a,b,c) :
+         ( (a, a') Core.Map.comparator
+           * (b, b') Core.Map.comparator
+           * (c, c') Core.Map.comparator
+         ))
+    : (r, r') Core.Map.comparator
+    =
+    match selector with
+    | S1 -> a
+    | S2 -> b
+    | S3 -> c
+
+  let tranpose3_gen
+      (type k1 k1' k2 k2' k3 k3' v c1 c1' c2 c2' c3 c3')
+      (selector :
+         (
+           ((k1 * c1) * (k2 * c2) * (k3 * c3), (k1' * c1')) sel3
+           * ((k1 * c1) * (k2 * c2) * (k3 * c3), (k2' * c2')) sel3
+           * ((k1 * c1) * (k2 * c2) * (k3 * c3), (k3' * c3')) sel3
+         )
+      )
+      ~empty2
+      ~empty3
+      (x : (k1, (k2,(k3,v,c3) Map.t,c2) Map.t, c1) Map.t)
+    : (k1', (k2',(k3',v,c3') Map.t,c2') Map.t, c1') Map.t
+    =
+    let s1, s2, s3 = selector in
+    let comparator_i3 = Map.comparator_s empty3 in
+    let comparator_i2 = Map.comparator_s empty2 in
+    let comparator_i1 = Map.comparator_s x in
+    let c = comparator_i1, comparator_i2, comparator_i3 in
+    let comparator_o3 = sel3_cmp s3 c in
+    let comparator_o2 = sel3_cmp s2 c in
+    let comparator_o1 = sel3_cmp s1 c in
+    Map.fold x
+      ~init:(Map.empty comparator_o1)
+      ~f:(fun ~key:key_i1 ~data acc ->
+          Map.fold data ~init:acc ~f:(fun ~key:key_i2 ~data acc ->
+              Map.fold data ~init:acc ~f:(fun ~key:key_i3 ~data acc ->
+                  let keys = key_i1, key_i2, key_i3 in
+                  let key_o1 = sel3_fst s1 keys in
+                  let key_o2 = sel3_fst s2 keys in
+                  let key_o3 = sel3_fst s3 keys in
+                  let new_map =
+                    match Map.find acc key_o1 with
+                    | None ->
+                      let data = Map.singleton comparator_o3 key_o3 data in
+                      Map.singleton comparator_o2 key_o2 data
+                    | Some map ->
+                      let new_map =
+                        match Map.find map key_o2 with
+                        | None -> Map.singleton comparator_o3 key_o3 data
+                        | Some map -> Map.add_exn map ~key:key_o3 ~data
+                      in
+                      Map.set map ~key:key_o2 ~data:new_map
+                  in
+                  Map.set acc ~key:key_o1 ~data:new_map
+                )
+            )
+        )
+
+  let transpose_312 ~empty2 ~empty3 x = tranpose3_gen (S3,S1,S2) ~empty2 ~empty3 x
+  let transpose_231 ~empty2 ~empty3 x = tranpose3_gen (S2,S3,S1) ~empty2 ~empty3 x
+
+end
+
+module Language_group = struct
+  type t =
+    { languages : Language_definition.t Language_name.Map.t
+    ; external_types : External_type_descriptor.t External_type_id.Map.t
+    }
+
+  let all_constructor_descriptions t 
+    : Type_instance.t Constructor_name.Map.t Defined_type_name.Map.t Language_name.Map.t =
+    Map.map t.languages ~f:Language_definition.all_constructor_descriptions
+
+  let constructor_membership_object
+      (constructor : Type_instance.t Language_name.Map.t)
+    =
+    ()
+
+  let constructors_by_defined_type t 
+    : Type_instance.t Language_name.Map.t Constructor_name.Map.t Defined_type_name.Map.t
+    =
+    let cd = all_constructor_descriptions t in
+    Transposer.transpose_231
+      ~empty2:Defined_type_name.Map.empty
+      ~empty3:Constructor_name.Map.empty
+      cd
+end
+
