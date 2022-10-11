@@ -44,6 +44,7 @@ module Ast_builder = struct
   let pmod_ident name = pmod_ident (Loc.make name)
   let class_infos ~name = class_infos ~name:(Loc.make name)
   let attribute = wrap_name attribute
+  let otag name = otag (Loc.make name)
 
   let ppat_construct name = ppat_construct (Loc.make name)
   let ppat_var name = ppat_var (Loc.make name)

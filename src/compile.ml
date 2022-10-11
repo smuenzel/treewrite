@@ -72,6 +72,8 @@ module External_type_descriptor = struct
       in
       String.concat
         ~sep:"__" (List.rev_map ~f:String.lowercase useful_name_components_rev)
+
+  let to_ident t = t.fully_qualified_name
 end
 
 module Module_name = struct
@@ -120,6 +122,14 @@ end
 
 module Constructor_name = struct
   include String_id.Make(struct let module_name = "Constructor_name" end)()
+
+  let variant_type t =
+    let open Ast_builder in
+    ptyp_variant
+      [ rtag (to_string t) false []
+      ]
+      Closed
+      None
 end
 
 module Type_shape = struct
@@ -144,8 +154,36 @@ module Defined_type_description = struct
   type t =
     { id : Defined_type_id.t
     ; name : Defined_type_name.t
+    ; language : Language_name.t
     ; shape : Type_shape.t
     } [@@deriving sexp]
+
+  let to_ident t =
+    Defined_type_name.ident_in_language t.name t.language
+end
+
+module All_types = struct
+  type t =
+    { external_types : External_type_descriptor.t External_type_id.Map.t
+    ; defined_types : Defined_type_description.t Defined_type_id.Map.t
+    } [@@deriving sexp]
+
+  let rec to_type (t : t) { Type_instance. id; parameters } =
+    let open Ast_builder in
+    let parameters = List.map parameters ~f:(to_type t) in
+    let name =
+      match id with
+      | External id ->
+        Map.find_exn t.external_types id
+        |> External_type_descriptor.to_ident
+      | Defined id ->
+        Map.find_exn t.defined_types id
+        |> Defined_type_description.to_ident
+    in
+    ptyp_constr
+      name
+      parameters
+
 end
 
 module Language_definition = struct
@@ -175,6 +213,21 @@ module Language_definition = struct
           | Variant constructors -> 
             Some (Constructor_name.Map.of_alist_exn constructors)
         )
+
+  let all_defined_types t : Defined_type_description.t Defined_type_id.Map.t =
+    Map.fold t.types_by_name ~init:Defined_type_id.Map.empty
+      ~f:(fun ~key:name ~data:id acc ->
+          let shape = Map.find_exn t.types_by_id id in
+          let data =
+            { Defined_type_description.
+              id
+            ; name
+            ; language = t.name
+            ; shape
+            }
+          in
+          Map.add_exn acc ~key:id ~data
+        )
 end
 
 module Transposer = struct
@@ -196,38 +249,6 @@ module Transposer = struct
                 | Some map -> Map.add_exn map ~key:key_outer ~data
               in
               Map.set acc ~key:key_inner ~data:new_map
-            )
-        )
-
-  let map3 (type ka kb kc v ca cb cc)
-      ~empty2
-      ~empty3
-      (x : (ka, (kb,(kc,v,cc) Map.t,cb) Map.t, ca) Map.t)
-    : (kc, (kb,(ka,v,ca) Map.t,cb) Map.t, cc) Map.t
-    =
-    let comparator_inner = Map.comparator_s empty3 in
-    let comparator_middle = Map.comparator_s empty2 in
-    let comparator_outer = Map.comparator_s x in
-    Map.fold x
-      ~init:(Map.empty comparator_inner)
-      ~f:(fun ~key:key_outer ~data acc ->
-          Map.fold data ~init:acc ~f:(fun ~key:key_middle ~data acc ->
-              Map.fold data ~init:acc ~f:(fun ~key:key_inner ~data acc ->
-                  let new_map =
-                    match Map.find acc key_inner with
-                    | None ->
-                      let data = Map.singleton comparator_outer key_outer data in
-                      Map.singleton comparator_middle key_middle data
-                    | Some map ->
-                      let new_map =
-                        match Map.find map key_middle with
-                        | None -> Map.singleton comparator_outer key_outer data
-                        | Some map -> Map.add_exn map ~key:key_outer ~data
-                      in
-                      Map.set map ~key:key_middle ~data:new_map
-                  in
-                  Map.set acc ~key:key_inner ~data:new_map
-                )
             )
         )
 
@@ -327,9 +348,54 @@ module Language_group = struct
     Map.map t.languages ~f:Language_definition.all_constructor_descriptions
 
   let constructor_membership_object
+    all_types
       (constructor : Type_instance.t Language_name.Map.t)
     =
-    ()
+    let open Ast_builder in
+    let members =
+      Map.fold ~init:[] constructor
+        ~f:(fun ~key:language_name ~data:type_instance acc ->
+            otag
+              (Language_name.to_variable_name language_name)
+              (All_types.to_type all_types type_instance)
+            :: acc
+          )
+    in
+    ptyp_object
+      members
+      Closed
+
+  let constructor_type
+      all_types
+      (constructors : Type_instance.t Language_name.Map.t Constructor_name.Map.t)
+    =
+    let open Ast_builder in
+    let params =
+      [ ptyp_any, (Asttypes.NoVariance,Asttypes.NoInjectivity)
+      ; ptyp_any, (Asttypes.NoVariance,Asttypes.NoInjectivity)
+      ]
+    in
+    let constructors =
+      Map.fold ~init:[] constructors
+        ~f:(fun ~key:name ~data:languages acc ->
+            let res =
+              ptyp_constr
+                (Lident "t")
+                [ constructor_membership_object all_types languages
+                ; Constructor_name.variant_type name
+                ]
+            in
+            constructor_declaration
+              ~res
+              ~args:(Pcstr_tuple [])
+              (Constructor_name.to_string name)
+            :: acc
+          )
+    in
+    let kind = Parsetree.Ptype_variant constructors in
+    type_declaration "t"
+      ~kind
+      ~params
 
   let constructors_by_defined_type t 
     : Type_instance.t Language_name.Map.t Constructor_name.Map.t Defined_type_name.Map.t
