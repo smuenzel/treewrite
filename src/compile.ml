@@ -38,6 +38,25 @@ module Hierarchical(Key : Hashable.S_plain) = struct
     let layer = layer_at_path t path in
     Queue.enqueue layer.items (Base data)
 
+  let rec materialize
+      (t : _ Layer.t)
+      ~path_rev
+      ~map_element
+      ~map_layer
+    =
+    Queue.fold t.items ~init:[]
+      ~f:(fun acc item ->
+          match item with
+          | Base element ->
+            (map_element ~path_rev element) :: acc
+          | Layer { name; contents } ->
+            let path_rev = name :: path_rev in
+            let result = materialize ~path_rev ~map_element ~map_layer contents in
+            (map_layer ~path_rev result) :: acc
+        )
+    |> List.rev
+    
+
 end
 
 module External_type_id = Unique_id.Int()
@@ -78,6 +97,10 @@ end
 
 module Module_name = struct
   include String_id.Make(struct let module_name = "Module_name" end)()
+
+  let of_string s = of_string (String.capitalize s)
+
+  let constructor_module = of_string "Constructors"
 end
 
 module Language_name = struct
@@ -94,6 +117,8 @@ module Defined_type_name = struct
   include T
   include Comparable.Make(T)
 
+  let of_module_path p = Nonempty_list.of_list_exn p
+
   let ident_in_language t language_name =
     let module_path_rev =
       Nonempty_list.to_list t
@@ -105,6 +130,8 @@ module Defined_type_name = struct
      |> Module_name.to_string)
     :: module_path_rev
     |> Longident.of_list_rev
+
+  let to_module_path t = Nonempty_list.to_list t
 end
 
 module Type_instance = struct
@@ -337,18 +364,23 @@ module Transposer = struct
 
 end
 
+module Hierarchical_module = Hierarchical(Module_name)
+
 module Language_group = struct
   type t =
     { languages : Language_definition.t Language_name.Map.t
     ; external_types : External_type_descriptor.t External_type_id.Map.t
     }
 
+  let all_types (_ : t) =
+    assert false
+
   let all_constructor_descriptions t 
     : Type_instance.t Constructor_name.Map.t Defined_type_name.Map.t Language_name.Map.t =
     Map.map t.languages ~f:Language_definition.all_constructor_descriptions
 
   let constructor_membership_object
-    all_types
+      all_types
       (constructor : Type_instance.t Language_name.Map.t)
     =
     let open Ast_builder in
@@ -405,5 +437,58 @@ module Language_group = struct
       ~empty2:Defined_type_name.Map.empty
       ~empty3:Constructor_name.Map.empty
       cd
+end
+
+module Synthesize = struct
+
+  let make_hierarchy (t : Language_group.t) =
+    let all_types = Language_group.all_types t in
+    let hier = Hierarchical_module.create () in
+    let constructors_by_defined_type =
+      Language_group.constructors_by_defined_type t
+    in
+    Map.iteri constructors_by_defined_type
+      ~f:(fun ~key:defined_type_name ~data:constructors ->
+          let defined_type_module =
+            Hierarchical_module.layer_at_path hier
+              (Defined_type_name.to_module_path defined_type_name)
+          in
+          let constructor_type = Language_group.constructor_type all_types constructors in
+          Hierarchical_module.insert
+            defined_type_module
+            [Module_name.constructor_module ]
+            (`Type constructor_type)
+        )
+    ;
+    hier
+
+  let types_module (hier) =
+    let open Ast_builder in
+    let map_element ~path_rev:_ element =
+      match element with
+      | `Type ty -> psig_type Recursive [ ty ]
+    in
+    let map_layer ~path_rev layer =
+      let name = Option.map ~f:Module_name.to_string (List.hd path_rev) in
+      let type_ = pmty_signature layer in
+      psig_module (module_declaration ~name ~type_)
+    in
+    let mat = 
+      Hierarchical_module.materialize hier
+        ~path_rev:[]
+        ~map_element
+        ~map_layer
+      |> pmty_signature
+    in
+    let expr =
+      pmod_constraint
+        (pmod_ident (Lident "Types"))
+        mat
+    in
+    pstr_recmodule [ module_binding ~name:(Some "Types") ~expr ]
+
+  let synth t =
+    make_hierarchy t
+    |> types_module
 end
 
