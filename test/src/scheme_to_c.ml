@@ -41,10 +41,72 @@ module rec Types : sig
     module Lsrc : sig
       type 'tag named =
         | T : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> 'tag named
-      [@@ocaml.unboxed]
 
       type t = T : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> t
-      [@@ocaml.unboxed]
+    end
+
+    module If_1 : sig
+      module Lsrc : sig
+        type t =
+          { cond : Types.T.Lsrc.t
+          ; ifso : Types.T.Lsrc.t
+          }
+      end
+    end
+
+    module If_2 : sig
+      module Lsrc : sig
+        type t =
+          { cond : Types.T.Lsrc.t
+          ; ifso : Types.T.Lsrc.t
+          ; ifnot : Types.T.Lsrc.t
+          }
+      end
+    end
+
+    module Lambda : sig
+      module Lsrc : sig
+        type t =
+          { params : Symbol.t Nonempty_list.t
+          ; body : Types.T.Lsrc.t Nonempty_list.t
+          }
+      end
+    end
+
+    module Let : sig
+      module Lsrc : sig
+        type t =
+          { definition : Types.Var_definition.Lsrc.t Nonempty_list.t
+          ; body : Types.T.Lsrc.t Nonempty_list.t
+          }
+      end
+    end
+
+    module Letrec : sig
+      module Lsrc : sig
+        type t =
+          { definition : Types.Var_definition.Lsrc.t Nonempty_list.t
+          ; body : Types.T.Lsrc.t Nonempty_list.t
+          }
+      end
+    end
+
+    module Setx : sig
+      module Lsrc : sig
+        type t =
+          { symbol : Symbol.t
+          ; new_value : Types.T.Lsrc.t
+          }
+      end
+    end
+  end
+
+  module Var_definition : sig
+    module Lsrc : sig
+      type t =
+        { symbol : Symbol.t
+        ; definition : Types.T.Lsrc.t
+        }
     end
   end
 end =

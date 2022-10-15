@@ -262,6 +262,14 @@ module Language_definition = struct
             Some (Constructor_name.Map.of_alist_exn constructors)
         )
 
+  let all_record_descriptions t =
+    Map.filter_map t.types_by_name
+      ~f:(fun id ->
+          match Map.find_exn t.types_by_id id with
+          | Record entries -> Some entries
+          | Variant _ -> None
+        )
+
   let all_defined_types t : Defined_type_description.t Defined_type_id.Map.t =
     Map.fold t.types_by_name ~init:Defined_type_id.Map.empty
       ~f:(fun ~key:name ~data:id acc ->
@@ -420,6 +428,9 @@ module Language_group = struct
     : Type_instance.t list Constructor_name.Map.t Defined_type_name.Map.t Language_name.Map.t =
     Map.map t.languages ~f:Language_definition.all_constructor_descriptions
 
+  let all_record_descriptions t =
+    Map.map t.languages ~f:Language_definition.all_record_descriptions
+
   let constructor_membership_object
       ?prefix
       all_types
@@ -481,6 +492,13 @@ module Language_group = struct
       ~empty2:Defined_type_name.Map.empty
       ~empty3:Constructor_name.Map.empty
       cd
+
+  let records_by_defined_type t 
+    : (Record_label.t * Type_instance.t) list Language_name.Map.t Defined_type_name.Map.t =
+    let rd = all_record_descriptions t in
+    Transposer.map2
+      ~empty:Defined_type_name.Map.empty
+      rd
 end
 
 module Synthesize = struct
@@ -494,6 +512,11 @@ module Synthesize = struct
           data_var
       ]
       Open
+
+  let unbox_type (tdecl : Parsetree.type_declaration) =
+    let open Ast_builder in
+    { tdecl
+      with ptype_attributes = [ attribute ~name:"ocaml.unboxed" ~payload:(PStr [])] }
 
   let make_constructor_packed_type ~name ~has_param language_name =
     let open Ast_builder in
@@ -532,14 +555,28 @@ module Synthesize = struct
         ~params
         name
     in
-    { tdecl
-      with ptype_attributes = [ attribute ~name:"ocaml.unboxed" ~payload:(PStr [])] }
+    tdecl
 
   let make_named_type language_name =
     make_constructor_packed_type ~name:"named" ~has_param:true language_name
 
   let make_unnamed_type language_name =
     make_constructor_packed_type ~name:"t" ~has_param:false language_name
+
+  let make_record_type ?prefix ~all_types entries =
+    let open Ast_builder in
+    let entries =
+      List.map entries
+        ~f:(fun (label, instance) ->
+            label_declaration
+              ~type_:(All_types.to_type ?prefix all_types instance)
+              (Record_label.to_string label)
+          )
+
+    in
+    type_declaration
+      "t"
+      ~kind:(Parsetree.Ptype_record entries)
 
   let make_hierarchy ?prefix (t : Language_group.t) =
     let all_types = Language_group.all_types t in
@@ -587,6 +624,22 @@ module Synthesize = struct
                 insert (`Type (make_unnamed_type language));
               )
         );
+    let records_by_defined_type = Language_group.records_by_defined_type t in
+    Map.iteri records_by_defined_type
+      ~f:(fun ~key:defined_type_name ~data:records_by_language ->
+          let defined_type_module =
+            Hierarchical_module.layer_at_path hier
+              (Defined_type_name.to_module_path defined_type_name)
+          in
+          Map.iteri records_by_language
+            ~f:(fun ~key:language_name ~data:record ->
+                Hierarchical_module.insert
+                  defined_type_module
+                  [ Language_name.to_module_name language_name ]
+                  (`Type (make_record_type ?prefix ~all_types record))
+              )
+        )
+    ;
     hier
 
   let types_module t =
