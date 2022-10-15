@@ -41,8 +41,10 @@ module rec Types : sig
     module Lsrc : sig
       type 'tag named =
         | T : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> 'tag named
+      [@@ocaml.unboxed]
 
       type t = T : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> t
+      [@@ocaml.unboxed]
     end
   end
 end =

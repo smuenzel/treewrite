@@ -488,16 +488,12 @@ module Synthesize = struct
   let linstance_open ?(data_var="data") language_name =
     let open Ast_builder in
     let data_var = ptyp_var data_var in
-      ptyp_object
-        [ otag
-            (Language_name.to_variable_name language_name)
-            data_var
-        ]
-        Open
-        (*
-    ; ptyp_var constructor_tag_var
-    ]
-           *)
+    ptyp_object
+      [ otag
+          (Language_name.to_variable_name language_name)
+          data_var
+      ]
+      Open
 
   let make_constructor_packed_type ~name ~has_param language_name =
     let open Ast_builder in
@@ -530,10 +526,14 @@ module Synthesize = struct
       then [ ptyp_var constructor_tag_var, (Asttypes.NoVariance,Asttypes.NoInjectivity) ]
       else []
     in
-    type_declaration
-      ~kind
-      ~params
-      name
+    let tdecl =
+      type_declaration
+        ~kind
+        ~params
+        name
+    in
+    { tdecl
+      with ptype_attributes = [ attribute ~name:"ocaml.unboxed" ~payload:(PStr [])] }
 
   let make_named_type language_name =
     make_constructor_packed_type ~name:"named" ~has_param:true language_name
