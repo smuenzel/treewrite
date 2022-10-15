@@ -72,6 +72,14 @@ module Type_id = struct
   let all_external_types = function
     | External id -> External_type_id.Set.singleton id
     | Defined _ -> External_type_id.Set.empty
+
+  let replace_external_ids mapping t =
+    match t with
+    | Defined _ -> t
+    | External eid ->
+      match Map.find mapping eid with
+      | None -> t
+      | Some eid -> External eid
 end
 
 module External_type_descriptor = struct
@@ -146,6 +154,13 @@ module Type_instance = struct
     } [@@deriving sexp]
 
   let all_external_types t = Type_id.all_external_types t.id
+
+  let rec replace_external_ids mapping t =
+    let parameters = List.map t.parameters ~f:(replace_external_ids mapping) in
+    let id = Type_id.replace_external_ids mapping t.id in
+    { id
+    ; parameters
+    }
 end
 
 module Record_label = struct
@@ -191,6 +206,13 @@ module Type_shape = struct
             )
       in
       gather v
+
+  let replace_external_ids t mapping =
+    match t with
+    | Record r ->
+      Record (List.map r ~f:(Tuple2.map_snd ~f:(Type_instance.replace_external_ids mapping)))
+    | Variant v ->
+      Variant (List.map v ~f:(Tuple2.map_snd ~f:(List.map ~f:(Type_instance.replace_external_ids mapping))))
 end
   
 module Defined_type_description = struct
@@ -240,6 +262,15 @@ module Language_definition = struct
     ; types_by_name : Defined_type_id.t Defined_type_name.Map.t
     ; types_by_id : Type_shape.t Defined_type_id.Map.t
     } [@@deriving sexp, fields]
+
+  let replace_external_ids t mapping =
+    let types_by_id =
+      Map.map t.types_by_id
+        ~f:(fun shape ->
+            Type_shape.replace_external_ids shape mapping
+          )
+    in
+    { t with types_by_id }
 
   let all_external_types t : External_type_id.Set.t =
     Fields.Direct.fold t
@@ -399,6 +430,42 @@ module Language_group = struct
   type t =
     { languages : Language_definition.t Language_name.Map.t
     ; external_types : External_type_descriptor.t External_type_id.Map.t
+    }
+
+  let merge t1 t2 =
+    let gather =
+      Map.fold
+        ~f:(fun ~key:type_id ~data (subst_name, subst_id, merged) ->
+            let { External_type_descriptor.fully_qualified_name; _ } = data in
+            match Map.find subst_name fully_qualified_name with
+            | Some canonical_id ->
+              subst_name
+            , Map.add_exn subst_id ~key:type_id ~data:canonical_id
+            , merged
+            | None ->
+              Map.add_exn subst_name ~key:fully_qualified_name ~data:type_id
+            , subst_id
+            , Map.add_exn merged ~key:type_id ~data
+          )
+    in
+    let init =
+      gather
+        ~init:(Longident.Map.empty, External_type_id.Map.empty, External_type_id.Map.empty)
+        t1.external_types
+    in
+    let _subst_name, subst_id, merged_external_types = gather ~init t2.external_types in
+    let languages =
+    Map.merge t1.languages t2.languages
+      ~f:(fun ~key elt ->
+          match elt with
+          | `Left x | `Right x ->
+            Some (Language_definition.replace_external_ids x subst_id)
+          | `Both _ ->
+            raise_s [%message "Duplicate Language" (key : Language_name.t)]
+        )
+    in
+    { languages
+    ; external_types = merged_external_types
     }
 
   let all_types ({ languages; external_types} : t) =
