@@ -507,8 +507,10 @@ module Synthesize = struct
     ;
     hier
 
-  let types_module (hier) =
+  let types_module t =
     let open Ast_builder in
+    let ident = Longident.Lident "Types" in
+    let hier = make_hierarchy ~prefix:ident t in
     let map_element ~path_rev:_ element =
       match element with
       | `Type ty -> psig_type Recursive [ ty ]
@@ -527,13 +529,12 @@ module Synthesize = struct
     in
     let expr =
       pmod_constraint
-        (pmod_ident (Lident "Types"))
+        (pmod_ident ident)
         mat
     in
     pstr_recmodule [ module_binding ~name:(Some "Types") ~expr ]
 
   let synth t =
-    make_hierarchy ~prefix:(Lident "Types") t
-    |> types_module
+    types_module t
 end
 
