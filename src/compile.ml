@@ -166,19 +166,30 @@ end
 module Type_shape = struct
   type t =
     | Record of (Record_label.t * Type_instance.t) list
-    | Variant of (Constructor_name.t * Type_instance.t) list
+    | Variant of (Constructor_name.t * Type_instance.t list) list
   [@@deriving sexp]
 
   let all_external_types t =
-    let gather =
-      List.fold ~init:External_type_id.Set.empty
-        ~f:(fun acc (_,instance) ->
-            Set.union acc (Type_instance.all_external_types instance)
-          )
-    in
     match t with
-    | Record r -> gather r
-    | Variant v -> gather v
+    | Record r ->
+      let gather =
+        List.fold ~init:External_type_id.Set.empty
+          ~f:(fun acc (_,instance) ->
+              Set.union acc (Type_instance.all_external_types instance)
+            )
+      in
+      gather r
+    | Variant v ->
+      let gather =
+        List.fold ~init:External_type_id.Set.empty
+          ~f:(fun acc (_,instances) ->
+              List.fold ~init:acc instances
+                ~f:(fun acc instance ->
+                    Set.union acc (Type_instance.all_external_types instance)
+                  )
+            )
+      in
+      gather v
 end
   
 module Defined_type_description = struct
@@ -379,21 +390,26 @@ module Language_group = struct
   let all_types (_ : t) =
     assert false
 
+  let maybe_tuple ctl =
+    match ctl with
+    | [ x ] -> x
+    | xs -> Ast_builder.ptyp_tuple xs
+
   let all_constructor_descriptions t 
-    : Type_instance.t Constructor_name.Map.t Defined_type_name.Map.t Language_name.Map.t =
+    : Type_instance.t list Constructor_name.Map.t Defined_type_name.Map.t Language_name.Map.t =
     Map.map t.languages ~f:Language_definition.all_constructor_descriptions
 
   let constructor_membership_object
       all_types
-      (constructor : Type_instance.t Language_name.Map.t)
+      (constructor : Type_instance.t list Language_name.Map.t)
     =
     let open Ast_builder in
     let members =
       Map.fold ~init:[] constructor
-        ~f:(fun ~key:language_name ~data:type_instance acc ->
+        ~f:(fun ~key:language_name ~data:type_instances acc ->
             otag
               (Language_name.to_variable_name language_name)
-              (All_types.to_type all_types type_instance)
+              (maybe_tuple (List.map ~f:(All_types.to_type all_types) type_instances))
             :: acc
           )
     in
@@ -403,7 +419,7 @@ module Language_group = struct
 
   let constructor_type
       all_types
-      (constructors : Type_instance.t Language_name.Map.t Constructor_name.Map.t)
+      (constructors : Type_instance.t list Language_name.Map.t Constructor_name.Map.t)
     =
     let open Ast_builder in
     let params =
@@ -434,7 +450,7 @@ module Language_group = struct
       ~params
 
   let constructors_by_defined_type t 
-    : Type_instance.t Language_name.Map.t Constructor_name.Map.t Defined_type_name.Map.t
+    : Type_instance.t list Language_name.Map.t Constructor_name.Map.t Defined_type_name.Map.t
     =
     let cd = all_constructor_descriptions t in
     Transposer.transpose_231

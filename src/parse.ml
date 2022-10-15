@@ -228,24 +228,90 @@ let gather_types ~language_name signature_types =
               )
         )
   in
-  ()
-  (*
-    List.fold signature_types ~init:[]
-      ~f:(fun acc (_tname, kind) ->
-          match kind with
-          | `Record entries ->
-            List.fold ~init:acc entries ~f:(fun acc (_,t) -> t :: acc)
-          | `Variant const ->
-            List.fold ~init:acc const ~f:(fun acc (_,t) ->
-                match t with
-                | `Alias _ -> acc
-                | `Tuple types -> types @ acc
-              )
-        )
-    |> List.map ~f:Pre_type_instance.of_coretype_exn
+  let defined_type_id_of_ident =
+    Map.Using_comparator.map_keys_exn
+      ~comparator:Longident.comparator
+      defined_types
+      ~f:(Defined_type_name.ident_in_language ~language_name)
   in
-  ()
-     *)
+  let defined_type_exclusions =
+    Map.key_set defined_types
+    |> Longident.Set.map
+      ~f:(Defined_type_name.ident_in_language ~language_name)
+  in
+  let external_coretypes =
+    Set.filter coretypes
+      ~f:(fun { External_type_descriptor.fully_qualified_name; _ } ->
+          not (Set.mem defined_type_exclusions fully_qualified_name)
+        )
+    |> Map.of_key_set
+         ~f:(fun _ -> External_type_id.create ())
+  in
+  let rec convert_type (ct : Ast.core_type) =
+    match ct.ptyp_desc with
+    | Ptyp_constr (typename, parameters) ->
+      let parameter_count = List.length parameters in
+      let parameters = List.map ~f:convert_type parameters in
+      let id =
+        match Map.find defined_type_id_of_ident typename.txt with
+        | Some defined_type_id -> Type_id.Defined defined_type_id
+        | None ->
+          Map.find_exn external_coretypes
+            { External_type_descriptor.
+              fully_qualified_name = typename.txt
+            ; parameter_count
+            }
+          |> Type_id.External
+      in
+      { Type_instance.id; parameters }
+    | _ -> assert false
+  in
+  let types_by_id =
+    List.fold signature_types
+      ~init:Defined_type_id.Map.empty
+      ~f:(fun acc (path, type_) ->
+          let key =
+            Defined_type_name.of_module_path path
+            |> Map.find_exn defined_types
+          in
+          match type_ with
+          | `Record list ->
+            let list =
+              List.map list
+                ~f:(fun (label, t) -> label, convert_type t)
+            in
+            Map.add_exn acc
+              ~key
+              ~data:(Type_shape.Record list)
+          | `Variant list ->
+            let list =
+              List.map list
+                ~f:(fun (constructor_name, t) ->
+                    let t =
+                      match t with
+                      | `Alias path ->
+                        let id =
+                          Map.find_exn defined_types (Defined_type_name.of_module_path path)
+                        in
+                        [ { Type_instance.
+                            id = Type_id.Defined id
+                          ; parameters = []
+                          }]
+                      | `Tuple list -> List.map list ~f:convert_type
+                    in
+                    constructor_name, t
+                  )
+            in
+            Map.add_exn acc
+              ~key
+              ~data:(Type_shape.Variant list)
+        )
+  in
+  { Language_definition.
+    name = language_name
+  ; types_by_id
+  ; types_by_name = defined_types
+  }
 
 let x ~path ~language_name sigi =
   parse_signature_item ~language_name ~path sigi
