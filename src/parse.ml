@@ -307,12 +307,29 @@ let gather_types ~language_name signature_types =
               ~data:(Type_shape.Variant list)
         )
   in
-  { Language_definition.
-    name = language_name
-  ; types_by_id
-  ; types_by_name = defined_types
+  let definition =
+    { Language_definition.
+      name = language_name
+    ; types_by_id
+    ; types_by_name = defined_types
+    }
+  in
+  let external_types =
+    external_coretypes
+    |> Map.to_alist
+    |> List.map ~f:Tuple2.swap
+    |> External_type_id.Map.of_alist_exn
+  in
+  { Language_group.
+    languages = Language_name.Map.singleton language_name definition
+  ; external_types
   }
 
-let x ~path ~language_name sigi =
-  parse_signature_item ~language_name ~path sigi
-  |> gather_types ~language_name
+let parse_language
+    ~language_name
+    signature
+  =
+  let signature_types =
+    parse_signature_item ~path:[] ~language_name signature
+  in
+  gather_types ~language_name signature_types

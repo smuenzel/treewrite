@@ -1,0 +1,11 @@
+(library
+  (name treewrite_test)
+  (inline_tests)
+  (libraries core treewrite_lib ppxlib core_kernel.nonempty_list)
+  (preprocess (pps ppx_jane metaquot.ppx))
+  )
+
+(cinaps
+  (files scheme_to_c.ml)
+  (libraries core treewrite_lib treewrite_test_definitions)
+  )

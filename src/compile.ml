@@ -200,8 +200,13 @@ module Defined_type_description = struct
     ; shape : Type_shape.t
     } [@@deriving sexp]
 
-  let to_ident t =
-    Defined_type_name.ident_in_language t.name ~language_name:t.language
+  let to_ident ?prefix t =
+    let n =
+      Defined_type_name.ident_in_language t.name ~language_name:t.language
+    in
+    match prefix with
+    | None -> n
+    | Some prefix -> Longident.dot prefix n
 end
 
 module All_types = struct
@@ -210,9 +215,9 @@ module All_types = struct
     ; defined_types : Defined_type_description.t Defined_type_id.Map.t
     } [@@deriving sexp]
 
-  let rec to_type (t : t) { Type_instance. id; parameters } =
+  let rec to_type ?prefix (t : t) { Type_instance. id; parameters } =
     let open Ast_builder in
-    let parameters = List.map parameters ~f:(to_type t) in
+    let parameters = List.map parameters ~f:(to_type ?prefix t) in
     let name =
       match id with
       | External id ->
@@ -220,7 +225,7 @@ module All_types = struct
         |> External_type_descriptor.to_ident
       | Defined id ->
         Map.find_exn t.defined_types id
-        |> Defined_type_description.to_ident
+        |> Defined_type_description.to_ident ?prefix
     in
     ptyp_constr
       name
@@ -387,8 +392,23 @@ module Language_group = struct
     ; external_types : External_type_descriptor.t External_type_id.Map.t
     }
 
-  let all_types (_ : t) =
-    assert false
+  let all_types ({ languages; external_types} : t) =
+    let defined_types =
+      Map.fold languages
+        ~init:Defined_type_id.Map.empty
+        ~f:(fun ~key:_ ~data:l acc ->
+            Language_definition.all_defined_types l
+            |> Map.merge acc
+              ~f:(fun ~key:_ -> function
+                  | `Left x | `Right x -> Some x
+                  | `Both _ -> assert false
+                )
+           )
+    in
+    { All_types.
+      external_types
+    ; defined_types
+    }
 
   let maybe_tuple ctl =
     match ctl with
@@ -400,6 +420,7 @@ module Language_group = struct
     Map.map t.languages ~f:Language_definition.all_constructor_descriptions
 
   let constructor_membership_object
+      ?prefix
       all_types
       (constructor : Type_instance.t list Language_name.Map.t)
     =
@@ -409,7 +430,8 @@ module Language_group = struct
         ~f:(fun ~key:language_name ~data:type_instances acc ->
             otag
               (Language_name.to_variable_name language_name)
-              (maybe_tuple (List.map ~f:(All_types.to_type all_types) type_instances))
+              (maybe_tuple
+                 (List.map ~f:(All_types.to_type ?prefix all_types) type_instances))
             :: acc
           )
     in
@@ -418,6 +440,7 @@ module Language_group = struct
       Closed
 
   let constructor_type
+      ?prefix
       all_types
       (constructors : Type_instance.t list Language_name.Map.t Constructor_name.Map.t)
     =
@@ -433,7 +456,7 @@ module Language_group = struct
             let res =
               ptyp_constr
                 (Lident "t")
-                [ constructor_membership_object all_types languages
+                [ constructor_membership_object ?prefix all_types languages
                 ; Constructor_name.variant_type name
                 ]
             in
@@ -461,7 +484,7 @@ end
 
 module Synthesize = struct
 
-  let make_hierarchy (t : Language_group.t) =
+  let make_hierarchy ?prefix (t : Language_group.t) =
     let all_types = Language_group.all_types t in
     let hier = Hierarchical_module.create () in
     let constructors_by_defined_type =
@@ -473,7 +496,9 @@ module Synthesize = struct
             Hierarchical_module.layer_at_path hier
               (Defined_type_name.to_module_path defined_type_name)
           in
-          let constructor_type = Language_group.constructor_type all_types constructors in
+          let constructor_type =
+            Language_group.constructor_type ?prefix all_types constructors
+          in
           Hierarchical_module.insert
             defined_type_module
             [Module_name.constructor_module ]
@@ -508,7 +533,7 @@ module Synthesize = struct
     pstr_recmodule [ module_binding ~name:(Some "Types") ~expr ]
 
   let synth t =
-    make_hierarchy t
+    make_hierarchy ~prefix:(Lident "Types") t
     |> types_module
 end
 
