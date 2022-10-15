@@ -31,6 +31,7 @@ module Hierarchical(Key : Hashable.S_plain) = struct
       | Some layer -> layer_at_path layer rest
       | None ->
         let layer = create () in
+        Hashtbl.add_exn t.sub_layers ~key:this ~data:layer;
         Queue.enqueue t.items (Layer { name = this; contents = layer });
         layer_at_path layer rest
 
@@ -484,12 +485,66 @@ end
 
 module Synthesize = struct
 
+  let linstance_open ?(data_var="data") language_name =
+    let open Ast_builder in
+    let data_var = ptyp_var data_var in
+      ptyp_object
+        [ otag
+            (Language_name.to_variable_name language_name)
+            data_var
+        ]
+        Open
+        (*
+    ; ptyp_var constructor_tag_var
+    ]
+           *)
+
+  let make_constructor_packed_type ~name ~has_param language_name =
+    let open Ast_builder in
+    let constructor_tag_var = "tag" in
+    let data_var = "data" in
+    let constructor_type =
+      ptyp_constr
+        (Longident.of_list [ "Constructors"; "t"])
+        [ linstance_open ~data_var language_name
+        ; ptyp_var constructor_tag_var
+        ]
+    in
+    let kind =
+      let res_param =
+        if has_param
+        then [ ptyp_var constructor_tag_var ]
+        else []
+      in
+      Parsetree.Ptype_variant
+        [ constructor_declaration "T"
+            ~res:(ptyp_constr (Lident name) res_param)
+            ~args:(Pcstr_tuple
+                     [ constructor_type
+                     ; ptyp_var data_var
+                     ])
+        ]
+    in
+    let params =
+      if has_param
+      then [ ptyp_var constructor_tag_var, (Asttypes.NoVariance,Asttypes.NoInjectivity) ]
+      else []
+    in
+    type_declaration
+      ~kind
+      ~params
+      name
+
+  let make_named_type language_name =
+    make_constructor_packed_type ~name:"named" ~has_param:true language_name
+
+  let make_unnamed_type language_name =
+    make_constructor_packed_type ~name:"t" ~has_param:false language_name
+
   let make_hierarchy ?prefix (t : Language_group.t) =
     let all_types = Language_group.all_types t in
     let hier = Hierarchical_module.create () in
-    let constructors_by_defined_type =
-      Language_group.constructors_by_defined_type t
-    in
+    let constructors_by_defined_type = Language_group.constructors_by_defined_type t in
     Map.iteri constructors_by_defined_type
       ~f:(fun ~key:defined_type_name ~data:constructors ->
           let defined_type_module =
@@ -501,10 +556,37 @@ module Synthesize = struct
           in
           Hierarchical_module.insert
             defined_type_module
-            [Module_name.constructor_module ]
+            [ Module_name.constructor_module ]
             (`Type constructor_type)
         )
     ;
+    let variant_types_and_languages =
+      Map.map
+        constructors_by_defined_type
+        ~f:(Map.fold
+              ~init:Language_name.Set.empty
+              ~f:(fun ~key:_ ~data acc ->
+                  Set.union acc (Map.key_set data)
+                )
+           )
+    in
+    Map.iteri variant_types_and_languages
+      ~f:(fun ~key:defined_type_name ~data:languages ->
+          let defined_type_module =
+            Hierarchical_module.layer_at_path hier
+              (Defined_type_name.to_module_path defined_type_name)
+          in
+          Set.iter languages
+            ~f:(fun language ->
+                let insert = 
+                  Hierarchical_module.insert
+                    defined_type_module
+                    [ Language_name.to_module_name language ]
+                in
+                insert (`Type (make_named_type language));
+                insert (`Type (make_unnamed_type language));
+              )
+        );
     hier
 
   let types_module t =

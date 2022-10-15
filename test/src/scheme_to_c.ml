@@ -37,6 +37,13 @@ module rec Types : sig
         | Begin : (< lsrc : Types.T.Lsrc.t Nonempty_list.t >, [ `Begin ]) t
         | And : (< lsrc : Types.T.Lsrc.t list >, [ `And ]) t
     end
+
+    module Lsrc : sig
+      type 'tag named =
+        | T : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> 'tag named
+
+      type t = T : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> t
+    end
   end
 end =
   Types
