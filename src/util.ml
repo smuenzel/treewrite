@@ -2,26 +2,30 @@ open! Core
 open! Ppxlib
 
 module Longident = struct
-  include Ppxlib.Longident
+  module T = struct
+    include Ppxlib.Longident
 
-  let sexp_of_t t =
-    flatten_exn t
-    |> [%sexp_of: string list]
+    let sexp_of_t t =
+      flatten_exn t
+      |> [%sexp_of: string list]
 
-  let rec of_list_rev = function
-    | [] -> assert false
-    | [ x ] -> Lident x
-    | x :: xs -> Ldot (of_list_rev xs, x)
+    let rec of_list_rev = function
+      | [] -> assert false
+      | [ x ] -> Lident x
+      | x :: xs -> Ldot (of_list_rev xs, x)
 
-  let of_list l = of_list_rev (List.rev l)
+    let of_list l = of_list_rev (List.rev l)
 
-  let t_of_sexp sexp =
-    [%of_sexp: string list] sexp
-    |> of_list
+    let t_of_sexp sexp =
+      [%of_sexp: string list] sexp
+      |> of_list
 
-  let dot (a : t) (b : t) =
-    (flatten_exn a) @ (flatten_exn b)
-    |> of_list
+    let dot (a : t) (b : t) =
+      (flatten_exn a) @ (flatten_exn b)
+      |> of_list
+  end
+  include T
+  include Comparable.Make_plain(T)
 end
 
 module Ast_builder = struct

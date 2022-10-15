@@ -74,10 +74,14 @@ module Type_id = struct
 end
 
 module External_type_descriptor = struct
-  type t =
-    { parameter_count : int
-    ; fully_qualified_name : Longident.t
-    } [@@deriving sexp]
+  module T = struct
+    type t =
+      { parameter_count : int
+      ; fully_qualified_name : Longident.t
+      } [@@deriving sexp, compare]
+  end
+  include T
+  include Comparable.Make_plain(T)
 
   let to_fun_name t =
     match Longident.flatten_exn t.fully_qualified_name with
@@ -119,7 +123,7 @@ module Defined_type_name = struct
 
   let of_module_path p = Nonempty_list.of_list_exn p
 
-  let ident_in_language t language_name =
+  let ident_in_language t ~language_name =
     let module_path_rev =
       Nonempty_list.to_list t
       |> List.rev_map ~f:(Module_name.to_string)
@@ -186,7 +190,7 @@ module Defined_type_description = struct
     } [@@deriving sexp]
 
   let to_ident t =
-    Defined_type_name.ident_in_language t.name t.language
+    Defined_type_name.ident_in_language t.name ~language_name:t.language
 end
 
 module All_types = struct
