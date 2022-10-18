@@ -46,16 +46,16 @@ module rec Types : sig
 
     module L1 : sig
       type 'tag named =
-        | T : (< l1 : 'data ; .. >, 'tag) Constructors.t * 'data -> 'tag named
+        | L : (< l1 : 'data ; .. >, 'tag) Constructors.t * 'data -> 'tag named
 
-      type t = T : (< l1 : 'data ; .. >, 'tag) Constructors.t * 'data -> t
+      type t = L : (< l1 : 'data ; .. >, 'tag) Constructors.t * 'data -> t
     end
 
     module Lsrc : sig
       type 'tag named =
-        | T : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> 'tag named
+        | L : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> 'tag named
 
-      type t = T : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> t
+      type t = L : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> t
     end
 
     module If_1 : sig

@@ -247,7 +247,7 @@ let gather_types ~language_name signature_types =
     |> Map.of_key_set
          ~f:(fun _ -> External_type_id.create ())
   in
-  let rec convert_type (ct : Ast.core_type) =
+  let rec convert_type (ct : Ast.core_type) : Type_instance.t =
     match ct.ptyp_desc with
     | Ptyp_constr (typename, parameters) ->
       let parameter_count = List.length parameters in
@@ -263,7 +263,7 @@ let gather_types ~language_name signature_types =
             }
           |> Type_id.External
       in
-      { Type_instance.id; parameters }
+      { id; parameters }
     | _ -> assert false
   in
   let types_by_id =
@@ -282,7 +282,7 @@ let gather_types ~language_name signature_types =
             in
             Map.add_exn acc
               ~key
-              ~data:(Type_shape.Record list)
+              ~data:(Record list : Type_shape.t)
           | `Variant list ->
             let list =
               List.map list
@@ -293,10 +293,10 @@ let gather_types ~language_name signature_types =
                         let id =
                           Map.find_exn defined_types (Defined_type_name.of_module_path path)
                         in
-                        [ { Type_instance.
-                            id = Type_id.Defined id
-                          ; parameters = []
-                          }]
+                        [ ({ id = Type_id.Defined id
+                           ; parameters = []
+                           } : Type_instance.t)
+                        ]
                       | `Tuple list -> List.map list ~f:convert_type
                     in
                     constructor_name, t
@@ -304,7 +304,7 @@ let gather_types ~language_name signature_types =
             in
             Map.add_exn acc
               ~key
-              ~data:(Type_shape.Variant list)
+              ~data:(Variant list : Type_shape.t)
         )
   in
   let definition =

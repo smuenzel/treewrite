@@ -1,6 +1,23 @@
 open! Core
 open! Ppxlib
 
+module List = struct
+  include List
+
+  let fold_map2_exn t1 t2 ~init ~f =
+    let acc = ref init in
+    let result =
+      map2_exn t1 t2
+        ~f:(fun v1 v2 ->
+            let new_acc, res = f !acc v1 v2 in
+            acc := new_acc;
+            res
+          )
+    in
+    !acc, result
+
+end
+
 module Longident = struct
   module T = struct
     include Ppxlib.Longident
@@ -86,3 +103,57 @@ let map_to_list_rev ~f map =
       )
 
 let map_to_list ~f map = List.rev (map_to_list_rev ~f map)
+
+let find_mergables
+    (type k v lifted comparator_witness)
+    (map : (k, v, _) Map.t)
+    ~lift
+    (module Lifted : Comparable.S_plain 
+      with type t = lifted
+       and type comparator_witness = comparator_witness)
+  =
+  Map.fold map
+    ~init:Lifted.Map.empty
+    ~f:(fun ~key ~data acc ->
+        Map.add_multi acc ~key:(lift ~key data) ~data:key
+      )
+  |> Map.filter
+    ~f:(function
+        | [] | [ _ ] -> false
+        | _ -> true
+      )
+
+(* Quadratic, could reduce to n log n, by lifting all elements, and adding an ordering
+   to the lifted data structure. *)
+let classify_mergables
+    (type k v merged_v)
+    (map : (k, v, _) Map.t)
+    ~lift
+    ~can_merge
+  : ((k, _) Set.t * merged_v) list * (k, v, _) Map.t =
+  let alist = Map.to_alist map in
+  let comparator = Map.comparator map in
+  let rec merge_first ~cannot_merge ~already_merged list =
+    match list with
+    | [] ->
+      already_merged, Map.Using_comparator.of_alist_exn ~comparator cannot_merge
+    | ((first_key, first) as first_elt) :: rest ->
+      let first_merge = lift ~key:first_key first in
+      let merged, unmerged = 
+        List.partition_map rest
+          ~f:(fun ((key, data) as elt) ->
+              if can_merge first_merge data
+              then First key
+              else Second elt
+            )
+      in
+      let cannot_merge, already_merged =
+        if List.is_empty merged
+        then first_elt::cannot_merge, already_merged
+        else cannot_merge,
+             ((Set.Using_comparator.of_list ~comparator merged), first_merge)
+             :: already_merged
+      in
+      merge_first ~cannot_merge ~already_merged rest
+  in
+  merge_first ~cannot_merge:[] ~already_merged:[] alist
