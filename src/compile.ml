@@ -244,7 +244,8 @@ module Defined_type_description = struct
       { id : Shared_type_id.t
       ; name : Defined_type_name.t
       ; language : Language_name.t
-      ; shape : Type_instance.With_shared.t Type_shape.With_shared.t
+      ; shape : Type_instance.With_shared.t Type_shape.General.t
+      ; type_instance_parameters : int Defined_type_name.Map.t
       } [@@deriving sexp]
   end
 end
@@ -604,7 +605,8 @@ module Language_group = struct
         ~f:(fun ~key:defined_type_name ~data:by_language acc ->
             Map.fold by_language ~init:acc
               ~f:(fun ~key:language ~data:(shared_type_id, record) acc ->
-                  let shape : _ Type_shape.With_shared.t =
+                  let type_instance_parameters = ref Defined_type_name.Set.empty in
+                  let shape : _ Type_shape.General.t =
                     List.map record
                       ~f:(fun (label, contents) ->
                           label
@@ -612,16 +614,25 @@ module Language_group = struct
                             ~f:(function
                                 | `Defined id -> Type_id.With_shared_instance.Defined id
                                 | `External id -> External id
-                                | `Instance_in_lang name -> Shared_instance name
+                                | `Instance_in_lang name ->
+                                  type_instance_parameters :=
+                                    Set.add !type_instance_parameters name;
+                                  Shared_instance name
                               )
                         )
-                    |> Type_shape.With_shared.Record
+                    |> Type_shape.General.Record
+                  in
+                  let type_instance_parameters =
+                    Set.to_list !type_instance_parameters
+                    |> List.mapi ~f:(fun i p -> p, i)
+                    |> Defined_type_name.Map.of_alist_exn
                   in
                   let type_description : Defined_type_description.Shared.t =
                     { id = shared_type_id
                     ; name = defined_type_name
                     ; language
                     ; shape
+                    ; type_instance_parameters
                     }
                   in
                   Map.update acc shared_type_id
