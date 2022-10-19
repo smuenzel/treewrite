@@ -292,11 +292,25 @@ module Language_definition = struct
     } [@@deriving sexp, fields]
 
   module With_shared = struct
+    type t' = t
+
     type t =
       { name : Language_name.t
       ; types_by_name : Defined_type_id.t Defined_type_name.Map.t
       ; types_by_id : Type_instance.t Type_shape.With_shared.t Defined_type_id.Map.t
       } [@@deriving sexp, fields]
+
+    let no_sharing t' =
+      let ({ name
+           ; types_by_name
+           ; types_by_id
+           } : t') = t'
+      in
+      let types_by_id = Map.map types_by_id ~f:Type_shape.With_shared.of_general in
+      { name
+      ; types_by_name
+      ; types_by_id
+      }
   end
 
   let replace_external_ids t mapping =
@@ -363,10 +377,23 @@ module Language_group = struct
     }
 
   module With_shared = struct
+    type t' = t
+
     type t =
       { languages : Language_definition.With_shared.t Language_name.Map.t
       ; external_types : External_type_descriptor.t External_type_id.Map.t
       ; shared_types : Defined_type_description.Shared.t Shared_type_id.Map.t
+      }
+
+    let no_sharing (t' : t') =
+      let ({ languages
+           ; external_types
+           } : t') = t'
+      in
+      let languages = Map.map languages ~f:Language_definition.With_shared.no_sharing in
+      { languages
+      ; external_types
+      ; shared_types = Shared_type_id.Map.empty
       }
   end
 
