@@ -93,6 +93,10 @@ module Ast_builder = struct
     | [] -> assert false
     | [ x ] -> x
     | x :: rest -> ptyp_arrow Nolabel x (ptyp_arrows rest)
+
+  let unbox_type (tdecl : Parsetree.type_declaration) =
+    { tdecl
+      with ptype_attributes = [ attribute ~name:"ocaml.unboxed" ~payload:(PStr [])] }
 end
 
 let map_to_list_rev ~f map =
@@ -139,7 +143,7 @@ let classify_mergables
       already_merged, Map.Using_comparator.of_alist_exn ~comparator cannot_merge
     | ((first_key, first) as first_elt) :: rest ->
       let first_merge = lift ~key:first_key first in
-      let merged, unmerged = 
+      let merged, _unmerged = 
         List.partition_map rest
           ~f:(fun ((key, data) as elt) ->
               if can_merge first_merge data

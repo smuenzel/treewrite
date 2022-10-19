@@ -77,9 +77,11 @@ module Type_id = struct
     | Defined of Defined_type_id.t
   [@@deriving sexp]
 
+  (*
   let all_external_types = function
     | External id -> External_type_id.Set.singleton id
     | Defined _ -> External_type_id.Set.empty
+     *)
 
   let replace_external_ids mapping t =
     match t with
@@ -115,6 +117,7 @@ module External_type_descriptor = struct
   include T
   include Comparable.Make_plain(T)
 
+  (*
   let to_fun_name t =
     match Longident.flatten_exn t.fully_qualified_name with
     | [] -> assert false
@@ -127,6 +130,7 @@ module External_type_descriptor = struct
       in
       String.concat
         ~sep:"__" (List.rev_map ~f:String.lowercase useful_name_components_rev)
+     *)
 
   let to_ident t = t.fully_qualified_name
 end
@@ -137,17 +141,6 @@ module Type_instance = struct
       { id : 'id
       ; parameters : 'id t list
       } [@@deriving sexp, compare]
-
-    let rec fold_map_id ~f ~init { id; parameters } =
-      let acc, id = f init id in
-      let acc, parameters =
-        List.fold_map parameters ~f:(fun acc t -> fold_map_id ~f ~init:acc t)
-          ~init:acc
-      in
-      acc
-    , { id
-      ; parameters
-      }
 
     let rec map ~f { id; parameters} =
       let id = f id in
@@ -164,7 +157,9 @@ module Type_instance = struct
   type t = Type_id.t General.t [@@deriving sexp]
   (* Parameters must be instantiated for now *)
 
+  (*
   let all_external_types (t : t) = Type_id.all_external_types t.id
+     *)
 
   let rec replace_external_ids mapping (t : t) : t =
     let parameters = List.map t.parameters ~f:(replace_external_ids mapping) in
@@ -197,6 +192,7 @@ module Type_shape = struct
       | Variant of (Constructor_name.t * 'instance list) list
     [@@deriving sexp]
 
+    (*
     let all_external_types t ~external_types_of_instance =
       match t with
       | Record r ->
@@ -218,6 +214,7 @@ module Type_shape = struct
               )
         in
         gather v
+       *)
 
   end
 
@@ -236,9 +233,11 @@ module Type_shape = struct
   type t = Type_instance.t General.t
   [@@deriving sexp]
 
+  (*
   let all_external_types t =
     General.all_external_types t
       ~external_types_of_instance:Type_instance.all_external_types
+     *)
 
   let replace_external_ids (t : t) mapping : t =
     match t with
@@ -256,9 +255,6 @@ module Defined_type_description = struct
     ; language : Language_name.t
     ; shape : Type_shape.t
     } [@@deriving sexp]
-
-  let to_ident ?prefix t =
-    Defined_type_name.ident_in_language ?prefix t.name ~language_name:t.language
 
   module Shared = struct
     type t =
@@ -283,33 +279,12 @@ module Defined_type_description = struct
   end
 
   module With_shared = struct
-    type t' = t
-
     type t =
       { id : Defined_type_id.t
       ; name : Defined_type_name.t
       ; language : Language_name.t
       ; shape : Type_instance.t Type_shape.With_shared.t
       } [@@deriving sexp]
-
-    let unshared_opt
-        { id
-        ; name
-        ; language
-        ; shape
-        } : t' option =
-      let open Option.Let_syntax in
-      let%map shape =
-        match shape with
-        | Shared _ -> None
-        | Record x -> Some (Type_shape.General.Record x)
-        | Variant x -> Some (Type_shape.General.Variant x)
-      in
-      ({ id
-       ; name
-       ; language
-       ; shape
-       } : t')
 
     let to_ident ?prefix t =
       Defined_type_name.ident_in_language ?prefix t.name ~language_name:t.language
@@ -325,36 +300,12 @@ module All_types = struct
   let defined_exn t id =
     Map.find_exn t.defined_types id
 
-  let rec to_type ?prefix (t : t) ({ id; parameters } : Type_instance.t) =
-    let open Ast_builder in
-    let parameters = List.map parameters ~f:(to_type ?prefix t) in
-    let name =
-      match id with
-      | External id ->
-        Map.find_exn t.external_types id
-        |> External_type_descriptor.to_ident
-      | Defined id ->
-        Map.find_exn t.defined_types id
-        |> Defined_type_description.to_ident ?prefix
-    in
-    ptyp_constr
-      name
-      parameters
-
   module With_shared = struct
-    type t' = t
-
     type t =
       { external_types : External_type_descriptor.t External_type_id.Map.t
       ; defined_types : Defined_type_description.With_shared.t Defined_type_id.Map.t
       ; shared_types : Defined_type_description.Shared.t Shared_type_id.Map.t
       } [@@deriving sexp]
-
-    let drop_shared t : t' =
-      { external_types = t.external_types
-      ; defined_types =
-          Map.filter_map t.defined_types ~f:Defined_type_description.With_shared.unshared_opt
-      }
 
     let rec to_type ?prefix (t : t) ({ id; parameters } : Type_instance.t) =
       let open Ast_builder in
@@ -423,25 +374,11 @@ module Language_definition = struct
     } [@@deriving sexp, fields]
 
   module With_shared = struct
-    type t' = t
-
     type t =
       { name : Language_name.t
       ; types_by_name : Defined_type_id.t Defined_type_name.Map.t
       ; types_by_id : Type_instance.t Type_shape.With_shared.t Defined_type_id.Map.t
       } [@@deriving sexp, fields]
-
-    let no_sharing t' =
-      let ({ name
-           ; types_by_name
-           ; types_by_id
-           } : t') = t'
-      in
-      let types_by_id = Map.map types_by_id ~f:Type_shape.With_shared.of_general in
-      { name
-      ; types_by_name
-      ; types_by_id
-      }
 
     let all_defined_types t : Defined_type_description.With_shared.t Defined_type_id.Map.t =
       Map.fold t.types_by_name ~init:Defined_type_id.Map.empty
@@ -497,6 +434,7 @@ module Language_definition = struct
     in
     { t with types_by_id }
 
+  (*
   let all_external_types t : External_type_id.Set.t =
     Fields.Direct.fold t
       ~init:External_type_id.Set.empty
@@ -508,15 +446,7 @@ module Language_definition = struct
                 Set.union acc (Type_shape.all_external_types type_shape)
               )
         )
-
-  let all_constructor_descriptions t =
-    Map.filter_map t.types_by_name
-      ~f:(fun id ->
-          match Map.find_exn t.types_by_id id with
-          | Record _ -> None
-          | Variant constructors -> 
-            Some (Constructor_name.Map.of_alist_exn constructors)
-        )
+     *)
 
   let all_record_descriptions t =
     Map.filter_map t.types_by_name
@@ -552,23 +482,10 @@ module Language_group = struct
     }
 
   module With_shared = struct
-    type t' = t
-
     type t =
       { languages : Language_definition.With_shared.t Language_name.Map.t
       ; external_types : External_type_descriptor.t External_type_id.Map.t
       ; shared_types : Defined_type_description.Shared.t Shared_type_id.Map.t
-      }
-
-    let no_sharing (t' : t') =
-      let ({ languages
-           ; external_types
-           } : t') = t'
-      in
-      let languages = Map.map languages ~f:Language_definition.With_shared.no_sharing in
-      { languages
-      ; external_types
-      ; shared_types = Shared_type_id.Map.empty
       }
 
     let all_types ({ languages; external_types; shared_types } : t) =
@@ -683,10 +600,6 @@ module Language_group = struct
     | [ x ] -> x
     | xs -> Ast_builder.ptyp_tuple xs
 
-  let all_constructor_descriptions t 
-    : Type_instance.t list Constructor_name.Map.t Defined_type_name.Map.t Language_name.Map.t =
-    Map.map t.languages ~f:Language_definition.all_constructor_descriptions
-
   let all_record_descriptions t =
     Map.map t.languages ~f:Language_definition.all_record_descriptions
 
@@ -742,15 +655,6 @@ module Language_group = struct
     type_declaration "t"
       ~kind
       ~params
-
-  let constructors_by_defined_type t 
-    : Type_instance.t list Language_name.Map.t Constructor_name.Map.t Defined_type_name.Map.t
-    =
-    let cd = all_constructor_descriptions t in
-    Transpose.transpose_231
-      ~empty2:Defined_type_name.Map.empty
-      ~empty3:Constructor_name.Map.empty
-      cd
 
   let records_by_defined_type t 
     : (Record_label.t * Type_instance.t) list Language_name.Map.t Defined_type_name.Map.t =
@@ -858,7 +762,7 @@ module Language_group = struct
       Map.fold shared ~init:Shared_type_id.Map.empty
         ~f:(fun ~key:defined_type_name ~data:by_language acc ->
             Map.fold by_language ~init:acc
-              ~f:(fun ~key:language ~data:(shared_type_id, record) acc ->
+              ~f:(fun ~key:_language ~data:(shared_type_id, record) acc ->
                   let type_instance_parameters = ref Defined_type_name.Set.empty in
                   let shape : _ Type_shape.General.t =
                     List.map record
@@ -914,11 +818,6 @@ module Synthesize = struct
           data_var
       ]
       Open
-
-  let unbox_type (tdecl : Parsetree.type_declaration) =
-    let open Ast_builder in
-    { tdecl
-      with ptype_attributes = [ attribute ~name:"ocaml.unboxed" ~payload:(PStr [])] }
 
   let make_constructor_packed_type ~name ~has_param language_name =
     let open Ast_builder in
@@ -990,8 +889,8 @@ module Synthesize = struct
 
   let make_shared_type ?prefix ~all_types (shared : Defined_type_description.Shared.t) =
     let open Ast_builder in
-    let ({ id
-         ; name
+    let ({ id = _
+         ; name = _
          ; shape
          ; type_instance_parameters
          } : Defined_type_description.Shared.t) = shared
