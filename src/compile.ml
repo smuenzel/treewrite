@@ -29,17 +29,43 @@ module Defined_type_name = struct
 
   let of_module_path p = Nonempty_list.of_list_exn p
 
-  let ident_in_language t ~language_name =
+  let ident_in_language ?prefix t ~language_name =
+    let module_path_rev =
+      Nonempty_list.to_list t
+      |> List.rev_map ~f:(Module_name.to_string)
+    in
+    let n =
+      "t"
+      ::
+      (Language_name.to_module_name language_name
+       |> Module_name.to_string)
+      :: module_path_rev
+      |> Longident.of_list_rev
+    in
+    match prefix with
+    | None -> n
+    | Some prefix -> Longident.dot prefix n
+
+  let to_module_path t = Nonempty_list.to_list t
+
+  let to_shared_module_path t shared_id =
+    to_module_path t
+    @
+    [ Printf.sprintf "Shared_%i" (Shared_type_id.to_int_exn shared_id)
+      |> Module_name.of_string
+    ]
+
+  let shared_ident t shared_id =
     let module_path_rev =
       Nonempty_list.to_list t
       |> List.rev_map ~f:(Module_name.to_string)
     in
     "t"
     ::
-    (Language_name.to_module_name language_name
-     |> Module_name.to_string)
+    (Printf.sprintf "Shared_%i" (Shared_type_id.to_int_exn shared_id))
     :: module_path_rev
     |> Longident.of_list_rev
+
 
   let to_module_path t = Nonempty_list.to_list t
 end
@@ -232,21 +258,61 @@ module Defined_type_description = struct
     } [@@deriving sexp]
 
   let to_ident ?prefix t =
-    let n =
-      Defined_type_name.ident_in_language t.name ~language_name:t.language
-    in
-    match prefix with
-    | None -> n
-    | Some prefix -> Longident.dot prefix n
+    Defined_type_name.ident_in_language ?prefix t.name ~language_name:t.language
 
   module Shared = struct
     type t =
       { id : Shared_type_id.t
       ; name : Defined_type_name.t
-      ; language : Language_name.t
       ; shape : Type_instance.With_shared.t Type_shape.General.t
       ; type_instance_parameters : int Defined_type_name.Map.t
       } [@@deriving sexp]
+
+    let parameters_in_order t =
+      Map.to_alist t.type_instance_parameters
+      |> List.sort ~compare:(fun (_,a) (_,b) -> Int.compare a b)
+      |> List.map ~f:fst
+
+    let to_ident ?prefix t =
+      let n =
+        Defined_type_name.shared_ident t.name t.id
+      in
+      match prefix with
+      | None -> n
+      | Some prefix -> Longident.dot prefix n
+  end
+
+  module With_shared = struct
+    type t' = t
+
+    type t =
+      { id : Defined_type_id.t
+      ; name : Defined_type_name.t
+      ; language : Language_name.t
+      ; shape : Type_instance.t Type_shape.With_shared.t
+      } [@@deriving sexp]
+
+    let unshared_opt
+        { id
+        ; name
+        ; language
+        ; shape
+        } : t' option =
+      let open Option.Let_syntax in
+      let%map shape =
+        match shape with
+        | Shared _ -> None
+        | Record x -> Some (Type_shape.General.Record x)
+        | Variant x -> Some (Type_shape.General.Variant x)
+      in
+      ({ id
+       ; name
+       ; language
+       ; shape
+       } : t')
+
+    let to_ident ?prefix t =
+      Defined_type_name.ident_in_language ?prefix t.name ~language_name:t.language
   end
 end
 
@@ -276,11 +342,76 @@ module All_types = struct
       parameters
 
   module With_shared = struct
+    type t' = t
+
     type t =
       { external_types : External_type_descriptor.t External_type_id.Map.t
-      ; defined_types : Defined_type_description.t Defined_type_id.Map.t
+      ; defined_types : Defined_type_description.With_shared.t Defined_type_id.Map.t
       ; shared_types : Defined_type_description.Shared.t Shared_type_id.Map.t
       } [@@deriving sexp]
+
+    let drop_shared t : t' =
+      { external_types = t.external_types
+      ; defined_types =
+          Map.filter_map t.defined_types ~f:Defined_type_description.With_shared.unshared_opt
+      }
+
+    let rec to_type ?prefix (t : t) ({ id; parameters } : Type_instance.t) =
+      let open Ast_builder in
+      let parameters = List.map parameters ~f:(to_type ?prefix t) in
+      let name =
+        match id with
+        | External id ->
+          Map.find_exn t.external_types id
+          |> External_type_descriptor.to_ident
+        | Defined id ->
+          Map.find_exn t.defined_types id
+          |> Defined_type_description.With_shared.to_ident ?prefix
+      in
+      ptyp_constr
+        name
+        parameters
+
+    let rec shared_to_type
+        ?prefix
+        (t : t)
+        instance_params
+        ({ id; parameters} : Type_instance.With_shared.t)
+      =
+      let open Ast_builder in
+      let parameters = List.map parameters ~f:(shared_to_type ?prefix t instance_params) in
+      match id with
+      | External id ->
+        let name =
+          Map.find_exn t.external_types id
+          |> External_type_descriptor.to_ident
+        in
+        ptyp_constr
+          name
+          parameters
+      | Defined id ->
+        let name =
+          Map.find_exn t.defined_types id
+          |> Defined_type_description.With_shared.to_ident ?prefix
+        in
+        ptyp_constr
+          name
+          parameters
+      | Shared_instance instance ->
+        assert (List.is_empty parameters);
+        Map.find_exn instance_params instance
+
+    let instantiate_shared_type ?prefix (t : t) shared_type_id language_name=
+      let open Ast_builder in
+      let shared_type = Map.find_exn t.shared_types shared_type_id in
+      let parameters =
+        Defined_type_description.Shared.parameters_in_order shared_type
+        |> List.map ~f:(Defined_type_name.ident_in_language ?prefix ~language_name)
+        |> List.map ~f:(fun name -> ptyp_constr name [])
+      in
+      ptyp_constr
+        (Defined_type_description.Shared.to_ident ?prefix shared_type)
+        parameters
   end
 end
 
@@ -311,7 +442,51 @@ module Language_definition = struct
       ; types_by_name
       ; types_by_id
       }
+
+    let all_defined_types t : Defined_type_description.With_shared.t Defined_type_id.Map.t =
+      Map.fold t.types_by_name ~init:Defined_type_id.Map.empty
+        ~f:(fun ~key:name ~data:id acc ->
+            let shape = Map.find_exn t.types_by_id id in
+            let data =
+              { Defined_type_description.With_shared.
+                id
+              ; name
+              ; language = t.name
+              ; shape
+              }
+            in
+            Map.add_exn acc ~key:id ~data
+          )
+
+    let all_constructor_descriptions t =
+      Map.filter_map t.types_by_name
+        ~f:(fun id ->
+            match Map.find_exn t.types_by_id id with
+            | Record _ -> None
+            | Variant constructors -> 
+              Some (Constructor_name.Map.of_alist_exn constructors)
+            | Shared _ -> None
+          )
+
+    let all_record_descriptions t =
+      Map.filter_map t.types_by_name
+        ~f:(fun id ->
+            match Map.find_exn t.types_by_id id with
+            | Record entries -> Some entries
+            | Variant _ -> None
+            | Shared _ -> None
+          )
+
+    let all_shared_descriptions t =
+      Map.filter_map t.types_by_name
+        ~f:(fun id ->
+            match Map.find_exn t.types_by_id id with
+            | Record _ -> None
+            | Variant _ -> None
+            | Shared shared -> Some shared
+          )
   end
+
 
   let replace_external_ids t mapping =
     let types_by_id =
@@ -395,6 +570,58 @@ module Language_group = struct
       ; external_types
       ; shared_types = Shared_type_id.Map.empty
       }
+
+    let all_types ({ languages; external_types; shared_types } : t) =
+      let defined_types =
+        Map.fold languages
+          ~init:Defined_type_id.Map.empty
+          ~f:(fun ~key:_ ~data:l acc ->
+              Language_definition.With_shared.all_defined_types l
+              |> Map.merge acc
+                ~f:(fun ~key:_ -> function
+                    | `Left x | `Right x -> Some x
+                    | `Both _ -> assert false
+                  )
+            )
+      in
+      { All_types.With_shared.
+        external_types
+      ; defined_types
+      ; shared_types
+      }
+
+    let all_constructor_descriptions t 
+      : Type_instance.t list Constructor_name.Map.t Defined_type_name.Map.t Language_name.Map.t =
+      Map.map t.languages ~f:Language_definition.With_shared.all_constructor_descriptions
+
+    let constructors_by_defined_type t 
+      : Type_instance.t list Language_name.Map.t Constructor_name.Map.t Defined_type_name.Map.t
+      =
+      let cd = all_constructor_descriptions t in
+      Transpose.transpose_231
+        ~empty2:Defined_type_name.Map.empty
+        ~empty3:Constructor_name.Map.empty
+        cd
+
+    let all_record_descriptions t =
+      Map.map t.languages ~f:Language_definition.With_shared.all_record_descriptions
+
+    let records_by_defined_type t 
+      : (Record_label.t * Type_instance.t) list Language_name.Map.t Defined_type_name.Map.t =
+      let rd = all_record_descriptions t in
+      Transpose.map2
+        ~empty:Defined_type_name.Map.empty
+        rd
+
+    let all_shared_descriptions t =
+      Map.map t.languages ~f:Language_definition.With_shared.all_shared_descriptions
+
+    let shared_by_defined_type t =
+      let rd = all_shared_descriptions t in
+      Transpose.map2
+        ~empty:Defined_type_name.Map.empty
+        rd
+
   end
 
   let merge t1 t2 =
@@ -475,7 +702,7 @@ module Language_group = struct
             otag
               (Language_name.to_variable_name language_name)
               (maybe_tuple
-                 (List.map ~f:(All_types.to_type ?prefix all_types) type_instances))
+                 (List.map ~f:(All_types.With_shared.to_type ?prefix all_types) type_instances))
             :: acc
           )
     in
@@ -657,7 +884,6 @@ module Language_group = struct
                   let type_description : Defined_type_description.Shared.t =
                     { id = shared_type_id
                     ; name = defined_type_name
-                    ; language
                     ; shape
                     ; type_instance_parameters
                     }
@@ -745,19 +971,65 @@ module Synthesize = struct
       List.map entries
         ~f:(fun (label, instance) ->
             label_declaration
-              ~type_:(All_types.to_type ?prefix all_types instance)
+              ~type_:(All_types.With_shared.to_type ?prefix all_types instance)
               (Record_label.to_string label)
           )
-
     in
     type_declaration
       "t"
       ~kind:(Parsetree.Ptype_record entries)
 
-  let make_hierarchy ?prefix (t : Language_group.t) =
-    let all_types = Language_group.all_types t in
+  let make_shared_type_for_language ?prefix ~all_types ~language_name shared =
+    let open Ast_builder in
+    let manifest =
+      All_types.With_shared.instantiate_shared_type ?prefix all_types shared language_name
+    in
+    type_declaration
+      "t"
+      ~manifest
+
+  let make_shared_type ?prefix ~all_types (shared : Defined_type_description.Shared.t) =
+    let open Ast_builder in
+    let ({ id
+         ; name
+         ; shape
+         ; type_instance_parameters
+         } : Defined_type_description.Shared.t) = shared
+    in
+    let type_instance_parameters =
+      Map.map ~f:(fun i -> ptyp_var (Printf.sprintf "v%i" i)) type_instance_parameters
+    in
+    let params = 
+      Map.length type_instance_parameters
+      (* CR smuenzel: fix *)
+      |> List.init
+        ~f:(fun i ->
+            ptyp_var (Printf.sprintf "v%i" i)
+          , (Asttypes.NoVariance,Asttypes.NoInjectivity)
+          )
+    in
+    let entries =
+      match shape with
+      | Record entries ->
+        List.map entries
+          ~f:(fun (label, instance) ->
+              label_declaration
+                ~type_:(All_types.With_shared.shared_to_type ?prefix all_types type_instance_parameters instance)
+                (Record_label.to_string label)
+            )
+      | _ -> assert false
+    in
+    type_declaration
+      ~params
+      ~kind:(Parsetree.Ptype_record entries)
+      "t"
+
+  let make_hierarchy ?prefix (t : Language_group.With_shared.t) =
+    let all_types = Language_group.With_shared.all_types t in
     let hier = Hierarchical_module.create () in
-    let constructors_by_defined_type = Language_group.constructors_by_defined_type t in
+    let constructors_by_defined_type =
+      Language_group.With_shared.constructors_by_defined_type t
+    in
     Map.iteri constructors_by_defined_type
       ~f:(fun ~key:defined_type_name ~data:constructors ->
           let defined_type_module =
@@ -800,7 +1072,7 @@ module Synthesize = struct
                 insert (`Type (make_unnamed_type language));
               )
         );
-    let records_by_defined_type = Language_group.records_by_defined_type t in
+    let records_by_defined_type = Language_group.With_shared.records_by_defined_type t in
     Map.iteri records_by_defined_type
       ~f:(fun ~key:defined_type_name ~data:records_by_language ->
           let defined_type_module =
@@ -814,6 +1086,32 @@ module Synthesize = struct
                   [ Language_name.to_module_name language_name ]
                   (`Type (make_record_type ?prefix ~all_types record))
               )
+        )
+    ;
+    let shared_by_defined_type = Language_group.With_shared.shared_by_defined_type t in
+    Map.iteri shared_by_defined_type
+      ~f:(fun ~key:defined_type_name ~data:shared_by_language ->
+          let defined_type_module =
+            Hierarchical_module.layer_at_path hier
+              (Defined_type_name.to_module_path defined_type_name)
+          in
+          Map.iteri shared_by_language
+            ~f:(fun ~key:language_name ~data:shared ->
+                Hierarchical_module.insert
+                  defined_type_module
+                  [ Language_name.to_module_name language_name ]
+                  (`Type (make_shared_type_for_language ?prefix ~all_types ~language_name shared))
+              )
+        )
+    ;
+    Map.iteri t.shared_types
+      ~f:(fun ~key:id ~data:type_descr ->
+          let t = make_shared_type ?prefix ~all_types type_descr in
+          let path = Defined_type_name.to_shared_module_path type_descr.name id in
+          Hierarchical_module.insert
+            hier
+            path
+            (`Type t)
         )
     ;
     hier
@@ -846,6 +1144,7 @@ module Synthesize = struct
     pstr_recmodule [ module_binding ~name:(Some "Types") ~expr ]
 
   let synth t =
-    types_module t
+    Language_group.share_types t
+    |> types_module
 end
 

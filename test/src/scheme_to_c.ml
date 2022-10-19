@@ -69,82 +69,86 @@ module rec Types : sig
 
     module If_2 : sig
       module L1 : sig
-        type t =
-          { cond : Types.T.L1.t
-          ; ifso : Types.T.L1.t
-          ; ifnot : Types.T.L1.t
-          }
+        type t = Types.T.L1.t Types.T.If_2.Shared_0.t
       end
 
       module Lsrc : sig
-        type t =
-          { cond : Types.T.Lsrc.t
-          ; ifso : Types.T.Lsrc.t
-          ; ifnot : Types.T.Lsrc.t
+        type t = Types.T.Lsrc.t Types.T.If_2.Shared_0.t
+      end
+
+      module Shared_0 : sig
+        type 'v0 t =
+          { cond : 'v0
+          ; ifso : 'v0
+          ; ifnot : 'v0
           }
       end
     end
 
     module Lambda : sig
       module L1 : sig
-        type t =
-          { params : Symbol.t Nonempty_list.t
-          ; body : Types.T.L1.t Nonempty_list.t
-          }
+        type t = Types.T.L1.t Types.T.Lambda.Shared_1.t
       end
 
       module Lsrc : sig
-        type t =
+        type t = Types.T.Lsrc.t Types.T.Lambda.Shared_1.t
+      end
+
+      module Shared_1 : sig
+        type 'v0 t =
           { params : Symbol.t Nonempty_list.t
-          ; body : Types.T.Lsrc.t Nonempty_list.t
+          ; body : 'v0 Nonempty_list.t
           }
       end
     end
 
     module Let : sig
       module L1 : sig
-        type t =
-          { definition : Types.Var_definition.L1.t Nonempty_list.t
-          ; body : Types.T.L1.t Nonempty_list.t
-          }
+        type t = (Types.T.L1.t, Types.Var_definition.L1.t) Types.T.Let.Shared_2.t
       end
 
       module Lsrc : sig
-        type t =
-          { definition : Types.Var_definition.Lsrc.t Nonempty_list.t
-          ; body : Types.T.Lsrc.t Nonempty_list.t
+        type t = (Types.T.Lsrc.t, Types.Var_definition.Lsrc.t) Types.T.Let.Shared_2.t
+      end
+
+      module Shared_2 : sig
+        type ('v0, 'v1) t =
+          { definition : 'v1 Nonempty_list.t
+          ; body : 'v0 Nonempty_list.t
           }
       end
     end
 
     module Letrec : sig
       module L1 : sig
-        type t =
-          { definition : Types.Var_definition.L1.t Nonempty_list.t
-          ; body : Types.T.L1.t Nonempty_list.t
-          }
+        type t = (Types.T.L1.t, Types.Var_definition.L1.t) Types.T.Letrec.Shared_3.t
       end
 
       module Lsrc : sig
-        type t =
-          { definition : Types.Var_definition.Lsrc.t Nonempty_list.t
-          ; body : Types.T.Lsrc.t Nonempty_list.t
+        type t = (Types.T.Lsrc.t, Types.Var_definition.Lsrc.t) Types.T.Letrec.Shared_3.t
+      end
+
+      module Shared_3 : sig
+        type ('v0, 'v1) t =
+          { definition : 'v1 Nonempty_list.t
+          ; body : 'v0 Nonempty_list.t
           }
       end
     end
 
     module Setx : sig
       module L1 : sig
-        type t =
-          { symbol : Symbol.t
-          ; new_value : Types.T.L1.t
-          }
+        type t = Types.T.L1.t Types.T.Setx.Shared_4.t
       end
 
       module Lsrc : sig
-        type t =
+        type t = Types.T.Lsrc.t Types.T.Setx.Shared_4.t
+      end
+
+      module Shared_4 : sig
+        type 'v0 t =
           { symbol : Symbol.t
-          ; new_value : Types.T.Lsrc.t
+          ; new_value : 'v0
           }
       end
     end
@@ -152,16 +156,17 @@ module rec Types : sig
 
   module Var_definition : sig
     module L1 : sig
-      type t =
-        { symbol : Symbol.t
-        ; definition : Types.T.L1.t
-        }
+      type t = Types.T.L1.t Types.Var_definition.Shared_5.t
     end
 
     module Lsrc : sig
-      type t =
+      type t = Types.T.Lsrc.t Types.Var_definition.Shared_5.t
+    end
+
+    module Shared_5 : sig
+      type 'v0 t =
         { symbol : Symbol.t
-        ; definition : Types.T.Lsrc.t
+        ; definition : 'v0
         }
     end
   end
