@@ -836,13 +836,17 @@ module Synthesize = struct
         then [ ptyp_var constructor_tag_var ]
         else []
       in
+      let instance =
+        ptyp_constr
+          (Longident.of_list [ "Linstance"; "t" ])
+          [ constructor_type
+          ; ptyp_var data_var
+          ]
+      in
       Parsetree.Ptype_variant
         [ constructor_declaration "L"
             ~res:(ptyp_constr (Lident name) res_param)
-            ~args:(Pcstr_tuple
-                     [ constructor_type
-                     ; ptyp_var data_var
-                     ])
+            ~args:(Pcstr_tuple [ instance ])
         ]
     in
     let params =
@@ -856,7 +860,7 @@ module Synthesize = struct
         ~params
         name
     in
-    tdecl
+    unbox_type tdecl
 
   let make_named_type language_name =
     make_constructor_packed_type ~name:"named" ~has_param:true language_name

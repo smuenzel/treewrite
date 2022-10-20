@@ -5,6 +5,10 @@ module Datum = Unit
 module Primitive = Unit
 module Constant = Unit
 
+module Linstance = struct
+  type ('a, 'b) t = 'a * 'b
+end
+
 (*$
   open! Core
   open! Treewrite_lib
@@ -46,16 +50,25 @@ module rec Types : sig
 
     module L1 : sig
       type 'tag named =
-        | L : (< l1 : 'data ; .. >, 'tag) Constructors.t * 'data -> 'tag named
+        | L :
+            ((< l1 : 'data ; .. >, 'tag) Constructors.t, 'data) Linstance.t
+            -> 'tag named
+      [@@ocaml.unboxed]
 
-      type t = L : (< l1 : 'data ; .. >, 'tag) Constructors.t * 'data -> t
+      type t = L : ((< l1 : 'data ; .. >, 'tag) Constructors.t, 'data) Linstance.t -> t
+      [@@ocaml.unboxed]
     end
 
     module Lsrc : sig
       type 'tag named =
-        | L : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> 'tag named
+        | L :
+            ((< lsrc : 'data ; .. >, 'tag) Constructors.t, 'data) Linstance.t
+            -> 'tag named
+      [@@ocaml.unboxed]
 
-      type t = L : (< lsrc : 'data ; .. >, 'tag) Constructors.t * 'data -> t
+      type t =
+        | L : ((< lsrc : 'data ; .. >, 'tag) Constructors.t, 'data) Linstance.t -> t
+      [@@ocaml.unboxed]
     end
 
     module If_1 : sig
