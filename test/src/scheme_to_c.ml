@@ -299,6 +299,20 @@ module Map_Lsrc_L1 = struct
     ; t__letrec : mapper -> T.Letrec.Lsrc.t -> T.Letrec.L1.t
     ; t__setx : mapper -> T.Setx.Lsrc.t -> T.Setx.L1.t
     ; var_definition : mapper -> Var_definition.Lsrc.t -> Var_definition.L1.t
+    ; t'Symbol : mapper -> [ `Symbol ] T.Lsrc.named -> T.L1.t
+    ; t'Primitive : mapper -> [ `Primitive ] T.Lsrc.named -> T.L1.t
+    ; t'Constant : mapper -> [ `Constant ] T.Lsrc.named -> T.L1.t
+    ; t'Quote : mapper -> [ `Quote ] T.Lsrc.named -> T.L1.t
+    ; t'If_1 : mapper -> [ `If_1 ] T.Lsrc.named -> T.L1.t
+    ; t'If_2 : mapper -> [ `If_2 ] T.Lsrc.named -> T.L1.t
+    ; t'Or : mapper -> [ `Or ] T.Lsrc.named -> T.L1.t
+    ; t'And : mapper -> [ `And ] T.Lsrc.named -> T.L1.t
+    ; t'Not : mapper -> [ `Not ] T.Lsrc.named -> T.L1.t
+    ; t'Begin : mapper -> [ `Begin ] T.Lsrc.named -> T.L1.t
+    ; t'Lambda : mapper -> [ `Lambda ] T.Lsrc.named -> T.L1.t
+    ; t'Let : mapper -> [ `Let ] T.Lsrc.named -> T.L1.t
+    ; t'Letrec : mapper -> [ `Letrec ] T.Lsrc.named -> T.L1.t
+    ; t'Setx : mapper -> [ `Setx ] T.Lsrc.named -> T.L1.t
     }
 end
 

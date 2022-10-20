@@ -36,7 +36,8 @@ module Defined_type_name : sig
   include Comparable.S_plain
 
   val ident_in_language
-    : ?prefix:Longident.t
+    : ?t_name:string
+    -> ?prefix:Longident.t
     -> t
     -> language_name:Language_name.t
     -> Longident.t

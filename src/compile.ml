@@ -30,6 +30,18 @@ module Language_name = struct
     |> Module_name.of_string
 end
 
+module Constructor_name = struct
+  include String_id.Make(struct let module_name = "Constructor_name" end)()
+
+  let variant_type t =
+    let open Ast_builder in
+    ptyp_variant
+      [ rtag (to_string t) false []
+      ]
+      Closed
+      None
+end
+
 module Defined_type_name = struct
   module T = struct
     type t = Module_name.t Nonempty_list.t [@@deriving sexp, compare]
@@ -39,13 +51,13 @@ module Defined_type_name = struct
 
   let of_module_path p = Nonempty_list.of_list_exn p
 
-  let ident_in_language ?prefix t ~language_name =
+  let ident_in_language ?(t_name="t") ?prefix t ~language_name =
     let module_path_rev =
       Nonempty_list.to_list t
       |> List.rev_map ~f:(Module_name.to_string)
     in
     let n =
-      "t"
+      t_name
       ::
       (Language_name.to_module_name language_name
        |> Module_name.to_string)
@@ -79,9 +91,18 @@ module Defined_type_name = struct
 
   let to_module_path t = Nonempty_list.to_list t
 
-  let to_fun_name (t : t) =
-    String.concat
-      ~sep:"__" (List.map ~f:Module_name.to_string_lower (Nonempty_list.to_list t))
+  let to_fun_name ?constructor (t : t) =
+    let result =
+      String.concat
+        ~sep:"__" (List.map ~f:Module_name.to_string_lower (Nonempty_list.to_list t))
+    in
+    let result =
+      match constructor with
+      | None -> result
+      | Some constructor ->
+        String.concat ~sep:"'" [ result; Constructor_name.to_string constructor ]
+    in
+    result
 end
 
 
@@ -185,18 +206,6 @@ end
 
 module Record_label = struct
   include String_id.Make(struct let module_name = "Record_label" end)()
-end
-
-module Constructor_name = struct
-  include String_id.Make(struct let module_name = "Constructor_name" end)()
-
-  let variant_type t =
-    let open Ast_builder in
-    ptyp_variant
-      [ rtag (to_string t) false []
-      ]
-      Closed
-      None
 end
 
 module Type_shape = struct
@@ -1157,8 +1166,52 @@ module Synthesize = struct
               |> Some
           )
     in
+    let direct_correspondence_constructor =
+      Map.merge source.types_by_name destination.types_by_name
+        ~f:(fun ~key m ->
+            match m with
+            | `Left _ -> None
+            | `Right _ -> None
+            | `Both (t_source, t_destination) ->
+              let t_source = Map.find_exn source.types_by_id t_source in
+              let destination =
+                All_types.With_shared.instantiate_defined_type all_types t_destination
+              in
+              match t_source with
+              | Record _ | Shared _ -> None
+              | Variant constructors ->
+                List.map constructors
+                  ~f:(fun (constructor, _) ->
+                      let named_type =
+                        (* CR smuenzel: need function for this *)
+                        ptyp_constr
+                          (Defined_type_name.ident_in_language
+                             key
+                             ~language_name:source.name
+                             ~t_name:"named"
+                          )
+                          [ Constructor_name.variant_type constructor
+                          ]
+                      in
+                      let type_ =
+                        ptyp_arrows
+                          [ self_type
+                          ; named_type
+                          ; destination
+                          ]
+                      in
+                      label_declaration
+                        ~type_
+                        (Defined_type_name.to_fun_name ~constructor key)
+                    )
+                |> Some
+          )
+    in
     let label_declarations =
-      Map.data direct_correspondence
+      List.concat
+        [ Map.data direct_correspondence
+        ; Map.data direct_correspondence_constructor |> List.concat
+        ]
     in
     let tdecl =
       type_declaration
