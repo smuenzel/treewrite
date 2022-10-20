@@ -17,8 +17,7 @@ end
 
   let () =
     Treewrite_test_definitions.Scheme_to_c.all
-    |> Compile.Synthesize.synth
-    |> List.return
+    |> Compile.Synthesize.synth ~mappers:[]
     |> Code_formatter.structure
     |> print_endline
 *)
@@ -185,5 +184,111 @@ module rec Types : sig
   end
 end =
   Types
+
+module T = struct
+  module Constructors = struct
+    type ('v0, 'v1) t = ('v0, 'v1) Types.T.Constructors.t
+  end
+
+  module L1 = struct
+    type 'v0 named = 'v0 Types.T.L1.named
+    type t = Types.T.L1.t
+  end
+
+  module Lsrc = struct
+    type 'v0 named = 'v0 Types.T.Lsrc.named
+    type t = Types.T.Lsrc.t
+  end
+
+  module If_1 = struct
+    module Lsrc = struct
+      type t = Types.T.If_1.Lsrc.t
+    end
+  end
+
+  module If_2 = struct
+    module L1 = struct
+      type t = Types.T.If_2.L1.t
+    end
+
+    module Lsrc = struct
+      type t = Types.T.If_2.Lsrc.t
+    end
+
+    module Shared_0 = struct
+      type 'v0 t = 'v0 Types.T.If_2.Shared_0.t
+    end
+  end
+
+  module Lambda = struct
+    module L1 = struct
+      type t = Types.T.Lambda.L1.t
+    end
+
+    module Lsrc = struct
+      type t = Types.T.Lambda.Lsrc.t
+    end
+
+    module Shared_1 = struct
+      type 'v0 t = 'v0 Types.T.Lambda.Shared_1.t
+    end
+  end
+
+  module Let = struct
+    module L1 = struct
+      type t = Types.T.Let.L1.t
+    end
+
+    module Lsrc = struct
+      type t = Types.T.Let.Lsrc.t
+    end
+
+    module Shared_2 = struct
+      type ('v0, 'v1) t = ('v0, 'v1) Types.T.Let.Shared_2.t
+    end
+  end
+
+  module Letrec = struct
+    module L1 = struct
+      type t = Types.T.Letrec.L1.t
+    end
+
+    module Lsrc = struct
+      type t = Types.T.Letrec.Lsrc.t
+    end
+
+    module Shared_3 = struct
+      type ('v0, 'v1) t = ('v0, 'v1) Types.T.Letrec.Shared_3.t
+    end
+  end
+
+  module Setx = struct
+    module L1 = struct
+      type t = Types.T.Setx.L1.t
+    end
+
+    module Lsrc = struct
+      type t = Types.T.Setx.Lsrc.t
+    end
+
+    module Shared_4 = struct
+      type 'v0 t = 'v0 Types.T.Setx.Shared_4.t
+    end
+  end
+end
+
+module Var_definition = struct
+  module L1 = struct
+    type t = Types.Var_definition.L1.t
+  end
+
+  module Lsrc = struct
+    type t = Types.Var_definition.Lsrc.t
+  end
+
+  module Shared_5 = struct
+    type 'v0 t = 'v0 Types.Var_definition.Shared_5.t
+  end
+end
 
 (*$*)

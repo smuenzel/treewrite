@@ -96,6 +96,8 @@ module Language_group : sig
 end
 
 module Synthesize : sig
-
-  val synth : Language_group.t -> Parsetree.structure_item
+  val synth
+    :  Language_group.t
+    -> mappers:(Language_name.t * Language_name.t) list
+    -> Parsetree.structure
 end

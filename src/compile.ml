@@ -1019,10 +1019,11 @@ module Synthesize = struct
     ;
     hier
 
+  let types_ident = Longident.Lident "Types" 
+
   let types_module t =
     let open Ast_builder in
-    let ident = Longident.Lident "Types" in
-    let hier = make_hierarchy ~prefix:ident t in
+    let hier = make_hierarchy ~prefix:types_ident t in
     let map_element ~path_rev:_ element =
       match element with
       | `Type ty -> psig_type Recursive [ ty ]
@@ -1041,13 +1042,59 @@ module Synthesize = struct
     in
     let expr =
       pmod_constraint
-        (pmod_ident ident)
+        (pmod_ident types_ident)
         mat
     in
-    pstr_recmodule [ module_binding ~name:(Some "Types") ~expr ]
+    pstr_recmodule [ module_binding ~name:(Some (Longident.name types_ident)) ~expr ]
 
-  let synth t =
-    Language_group.share_types t
-    |> types_module
+  let nonrec_module t =
+    let open Ast_builder in
+    let hier = make_hierarchy t in
+    let map_element ~path_rev element =
+      match element with
+      | `Type { Parsetree. ptype_name; ptype_params; _ } ->
+        let ptype_name = ptype_name.txt in
+        let params =
+          List.mapi ptype_params ~f:(fun i _ -> ptyp_var (Printf.sprintf "v%i" i))
+        in
+        let manifest =
+          ptyp_constr
+            (Longident.of_list
+               (List.concat 
+                  [ [ Longident.name types_ident ]
+                  ; (List.rev_map ~f:Module_name.to_string path_rev)
+                  ; [ ptype_name ]
+                  ]
+               ))
+            params
+        in
+        let tdecl : Parsetree.type_declaration =
+          type_declaration
+            ptype_name
+            ~manifest
+            ~params:(List.map params
+                       ~f:(fun x -> x, (Asttypes.NoVariance,Asttypes.NoInjectivity)))
+        in
+        pstr_type Recursive [ tdecl ]
+    in
+    let map_layer ~path_rev layer =
+      let name = Option.map ~f:Module_name.to_string (List.hd path_rev) in
+      let expr = pmod_structure layer in
+      pstr_module (module_binding ~name ~expr)
+    in
+    let mat =
+      Hierarchical_module.materialize hier
+        ~path_rev:[]
+        ~map_element
+        ~map_layer
+    in
+    mat
+
+  let synth t ~mappers:_ =
+    let t = Language_group.share_types t in
+    List.concat
+     [ [ types_module t ]
+     ; nonrec_module t
+     ]
 end
 
