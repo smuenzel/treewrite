@@ -17,7 +17,8 @@ end
 
   let () =
     Treewrite_test_definitions.Scheme_to_c.all
-    |> Compile.Synthesize.synth ~mappers:[]
+    |> Compile.Synthesize.synth
+      ~mappers:Treewrite_test_definitions.Scheme_to_c.mappers
     |> Code_formatter.structure
     |> print_endline
 *)
@@ -287,6 +288,18 @@ module Var_definition = struct
   module Shared_5 = struct
     include Types.Var_definition.Shared_5
   end
+end
+
+module Map_Lsrc_L1 = struct
+  type mapper =
+    { t : mapper -> T.Lsrc.t -> T.L1.t
+    ; t__if_2 : mapper -> T.If_2.Lsrc.t -> T.If_2.L1.t
+    ; t__lambda : mapper -> T.Lambda.Lsrc.t -> T.Lambda.L1.t
+    ; t__let : mapper -> T.Let.Lsrc.t -> T.Let.L1.t
+    ; t__letrec : mapper -> T.Letrec.Lsrc.t -> T.Letrec.L1.t
+    ; t__setx : mapper -> T.Setx.Lsrc.t -> T.Setx.L1.t
+    ; var_definition : mapper -> Var_definition.Lsrc.t -> Var_definition.L1.t
+    }
 end
 
 (*$*)

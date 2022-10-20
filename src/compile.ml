@@ -11,6 +11,8 @@ module Module_name = struct
   let of_string s = of_string (String.capitalize s)
 
   let constructor_module = of_string "Constructors"
+
+  let to_string_lower t = String.lowercase (to_string t)
 end
 
 module Language_name = struct
@@ -18,6 +20,14 @@ module Language_name = struct
 
   let to_variable_name t = String.lowercase (to_string t)
   let to_module_name t = Module_name.of_string (String.capitalize (to_string t))
+
+  let to_mapper_module_name t1 t2 =
+    String.concat ~sep:"_"
+      [ "Map"
+      ; String.capitalize (to_string t1)
+      ; String.capitalize (to_string t2)
+      ]
+    |> Module_name.of_string
 end
 
 module Defined_type_name = struct
@@ -68,6 +78,10 @@ module Defined_type_name = struct
 
 
   let to_module_path t = Nonempty_list.to_list t
+
+  let to_fun_name (t : t) =
+    String.concat
+      ~sep:"__" (List.map ~f:Module_name.to_string_lower (Nonempty_list.to_list t))
 end
 
 
@@ -352,7 +366,7 @@ module All_types = struct
         assert (List.is_empty parameters);
         Map.find_exn instance_params instance
 
-    let instantiate_shared_type ?prefix (t : t) shared_type_id language_name=
+    let instantiate_shared_type ?prefix (t : t) shared_type_id language_name =
       let open Ast_builder in
       let shared_type = Map.find_exn t.shared_types shared_type_id in
       let parameters =
@@ -363,6 +377,13 @@ module All_types = struct
       ptyp_constr
         (Defined_type_description.Shared.to_ident ?prefix shared_type)
         parameters
+
+    let instantiate_defined_type ?prefix (t : t) defined_type_id =
+      let open Ast_builder in
+      let defined_type = Map.find_exn t.defined_types defined_type_id in
+      ptyp_constr
+        (Defined_type_description.With_shared.to_ident ?prefix defined_type)
+        []
   end
 end
 
@@ -1109,11 +1130,69 @@ module Synthesize = struct
     in
     List.concat mat
 
-  let synth t ~mappers:_ =
+  let mapper_type (t : Language_group.With_shared.t) ~source ~destination =
+    let open Ast_builder in
+    let all_types = Language_group.With_shared.all_types t in
+    let self_name = "mapper" in
+    let self_type = ptyp_constr (Lident self_name) [] in
+    let source = Map.find_exn t.languages source in
+    let destination = Map.find_exn t.languages destination in
+    let direct_correspondence =
+      Map.merge source.types_by_name destination.types_by_name
+        ~f:(fun ~key m ->
+            match m with
+            | `Left _ -> None
+            | `Right _ -> None
+            | `Both (t_source, t_destination) ->
+              let type_ =
+                ptyp_arrows
+                  [ self_type
+                  ; All_types.With_shared.instantiate_defined_type all_types t_source
+                  ; All_types.With_shared.instantiate_defined_type all_types t_destination
+                  ]
+              in
+              label_declaration
+                ~type_
+                (Defined_type_name.to_fun_name key)
+              |> Some
+          )
+    in
+    let label_declarations =
+      Map.data direct_correspondence
+    in
+    let tdecl =
+      type_declaration
+        self_name
+        ~kind:(Ptype_record label_declarations)
+    in
+    pstr_type
+      Recursive
+      [ tdecl
+      ]
+
+  let make_mappers t mappers =
+    let open Ast_builder in
+    List.map mappers
+      ~f:(fun (source, destination) ->
+          let name =
+            Language_name.to_mapper_module_name source destination
+            |> Module_name.to_string
+          in
+          let structure =
+            [ mapper_type t ~source ~destination
+            ]
+          in
+          let expr = pmod_structure structure in
+          pstr_module
+            (module_binding ~name:(Some name) ~expr)
+        )
+
+  let synth t ~mappers =
     let t = Language_group.share_types t in
     List.concat
      [ [ types_module t ]
      ; nonrec_module t
+     ; make_mappers t mappers
      ]
 end
 

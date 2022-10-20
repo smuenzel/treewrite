@@ -72,3 +72,7 @@ let l1 =
 
 let all =
   Compile.Language_group.merge lsrc l1
+
+let mappers =
+  [ "lsrc", "l1"
+  ] |> List.map ~f:(Tuple2.map ~f:Compile.Language_name.of_string)
