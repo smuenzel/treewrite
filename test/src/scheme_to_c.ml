@@ -187,107 +187,105 @@ end =
 
 module T = struct
   module Constructors = struct
-    type ('v0, 'v1) t = ('v0, 'v1) Types.T.Constructors.t
+    include Types.T.Constructors
   end
 
   module L1 = struct
-    type 'v0 named = 'v0 Types.T.L1.named
-    type t = Types.T.L1.t
+    include Types.T.L1
   end
 
   module Lsrc = struct
-    type 'v0 named = 'v0 Types.T.Lsrc.named
-    type t = Types.T.Lsrc.t
+    include Types.T.Lsrc
   end
 
   module If_1 = struct
     module Lsrc = struct
-      type t = Types.T.If_1.Lsrc.t
+      include Types.T.If_1.Lsrc
     end
   end
 
   module If_2 = struct
     module L1 = struct
-      type t = Types.T.If_2.L1.t
+      include Types.T.If_2.L1
     end
 
     module Lsrc = struct
-      type t = Types.T.If_2.Lsrc.t
+      include Types.T.If_2.Lsrc
     end
 
     module Shared_0 = struct
-      type 'v0 t = 'v0 Types.T.If_2.Shared_0.t
+      include Types.T.If_2.Shared_0
     end
   end
 
   module Lambda = struct
     module L1 = struct
-      type t = Types.T.Lambda.L1.t
+      include Types.T.Lambda.L1
     end
 
     module Lsrc = struct
-      type t = Types.T.Lambda.Lsrc.t
+      include Types.T.Lambda.Lsrc
     end
 
     module Shared_1 = struct
-      type 'v0 t = 'v0 Types.T.Lambda.Shared_1.t
+      include Types.T.Lambda.Shared_1
     end
   end
 
   module Let = struct
     module L1 = struct
-      type t = Types.T.Let.L1.t
+      include Types.T.Let.L1
     end
 
     module Lsrc = struct
-      type t = Types.T.Let.Lsrc.t
+      include Types.T.Let.Lsrc
     end
 
     module Shared_2 = struct
-      type ('v0, 'v1) t = ('v0, 'v1) Types.T.Let.Shared_2.t
+      include Types.T.Let.Shared_2
     end
   end
 
   module Letrec = struct
     module L1 = struct
-      type t = Types.T.Letrec.L1.t
+      include Types.T.Letrec.L1
     end
 
     module Lsrc = struct
-      type t = Types.T.Letrec.Lsrc.t
+      include Types.T.Letrec.Lsrc
     end
 
     module Shared_3 = struct
-      type ('v0, 'v1) t = ('v0, 'v1) Types.T.Letrec.Shared_3.t
+      include Types.T.Letrec.Shared_3
     end
   end
 
   module Setx = struct
     module L1 = struct
-      type t = Types.T.Setx.L1.t
+      include Types.T.Setx.L1
     end
 
     module Lsrc = struct
-      type t = Types.T.Setx.Lsrc.t
+      include Types.T.Setx.Lsrc
     end
 
     module Shared_4 = struct
-      type 'v0 t = 'v0 Types.T.Setx.Shared_4.t
+      include Types.T.Setx.Shared_4
     end
   end
 end
 
 module Var_definition = struct
   module L1 = struct
-    type t = Types.Var_definition.L1.t
+    include Types.Var_definition.L1
   end
 
   module Lsrc = struct
-    type t = Types.Var_definition.Lsrc.t
+    include Types.Var_definition.Lsrc
   end
 
   module Shared_5 = struct
-    type 'v0 t = 'v0 Types.Var_definition.Shared_5.t
+    include Types.Var_definition.Shared_5
   end
 end
 

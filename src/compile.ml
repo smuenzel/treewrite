@@ -1050,37 +1050,56 @@ module Synthesize = struct
   let nonrec_module t =
     let open Ast_builder in
     let hier = make_hierarchy t in
+    let has_include = Hash_set.Poly.create () in
     let map_element ~path_rev element =
       match element with
-      | `Type { Parsetree. ptype_name; ptype_params; _ } ->
-        let ptype_name = ptype_name.txt in
-        let params =
-          List.mapi ptype_params ~f:(fun i _ -> ptyp_var (Printf.sprintf "v%i" i))
-        in
-        let manifest =
-          ptyp_constr
-            (Longident.of_list
-               (List.concat 
-                  [ [ Longident.name types_ident ]
-                  ; (List.rev_map ~f:Module_name.to_string path_rev)
-                  ; [ ptype_name ]
-                  ]
-               ))
-            params
-        in
-        let tdecl : Parsetree.type_declaration =
-          type_declaration
-            ptype_name
-            ~manifest
-            ~params:(List.map params
-                       ~f:(fun x -> x, (Asttypes.NoVariance,Asttypes.NoInjectivity)))
-        in
-        pstr_type Recursive [ tdecl ]
+      | `Type { Parsetree. ptype_name = _ ; ptype_params = _; _ } ->
+        if Hash_set.mem has_include path_rev
+        then []
+        else begin
+          let inc =
+          pstr_include
+            (include_infos
+               (pmod_ident
+                  (Longident.of_list
+                     (List.concat 
+                        [ [ Longident.name types_ident ]
+                        ; (List.rev_map ~f:Module_name.to_string path_rev)
+                        ]))))
+          in
+          Hash_set.add has_include path_rev;
+          [ inc ]
+        end
+    (* {[
+         let ptype_name = ptype_name.txt in
+         let params =
+           List.mapi ptype_params ~f:(fun i _ -> ptyp_var (Printf.sprintf "v%i" i))
+         in
+         let manifest =
+           ptyp_constr
+             (Longident.of_list
+                (List.concat 
+                   [ [ Longident.name types_ident ]
+                   ; (List.rev_map ~f:Module_name.to_string path_rev)
+                   ; [ ptype_name ]
+                   ]
+                ))
+             params
+         in
+         let tdecl : Parsetree.type_declaration =
+           type_declaration
+             ptype_name
+             ~manifest
+             ~params:(List.map params
+                        ~f:(fun x -> x, (Asttypes.NoVariance,Asttypes.NoInjectivity)))
+         in
+         pstr_type Recursive [ tdecl ]
+       ]} *)
     in
     let map_layer ~path_rev layer =
       let name = Option.map ~f:Module_name.to_string (List.hd path_rev) in
-      let expr = pmod_structure layer in
-      pstr_module (module_binding ~name ~expr)
+      let expr = pmod_structure (List.concat layer) in
+      [ pstr_module (module_binding ~name ~expr) ]
     in
     let mat =
       Hierarchical_module.materialize hier
@@ -1088,7 +1107,7 @@ module Synthesize = struct
         ~map_element
         ~map_layer
     in
-    mat
+    List.concat mat
 
   let synth t ~mappers:_ =
     let t = Language_group.share_types t in
