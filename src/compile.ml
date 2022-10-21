@@ -1273,6 +1273,7 @@ module Synthesize = struct
           None
           (ppat_constraint (ppat_construct unsealed None) self_type)
           (pexp_constraint sealing_expr self_type_sealed)
+        |> inlined_always
       in
       pstr_value Nonrecursive
         [ value_binding ~pat ~expr

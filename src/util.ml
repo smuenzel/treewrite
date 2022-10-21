@@ -109,6 +109,17 @@ module Ast_builder = struct
       with pexp_attributes = [ attribute ~name:"ocaml.inlined" ~payload:(attr_ident_payload "hint")]
     }
 
+  let inlined_always (exp : Parsetree.expression) =
+    { exp
+      with pexp_attributes = [ attribute ~name:"ocaml.inline" ~payload:(attr_ident_payload "always")]
+    }
+
+
+  let inline_vb (vb : Parsetree.value_binding) =
+    { vb
+      with pvb_attributes = [ attribute ~name:"ocaml.inline" ~payload:(attr_ident_payload "always")]
+    }
+
   let allow_duplicate_attribute =
     attribute ~name:"ocaml.warning" ~payload:(attr_string_payload "-30")
 

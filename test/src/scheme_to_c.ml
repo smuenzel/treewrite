@@ -341,7 +341,8 @@ module Map_Lsrc_L1 = struct
     ; t'Setx : [ `Setx ] T.Lsrc.named -> T.L1.t
     }
 
-  let seal_mapper (unsealed : mapper) : mapper_sealed =
+  let seal_mapper =
+   fun [@ocaml.inline always] (unsealed : mapper) : mapper_sealed ->
     let rec sealed =
       ({ t = (fun (input : T.Lsrc.t) -> (unsealed.t [@ocaml.inlined hint]) sealed input)
        ; t__if_2 =
@@ -408,7 +409,7 @@ module Map_Lsrc_L1 = struct
         : mapper_sealed)
     in
     sealed
-  ;;
+ ;;
 end
 
 module Map_Lsrc_Lsrc = struct
@@ -464,7 +465,8 @@ module Map_Lsrc_Lsrc = struct
     ; t'Setx : [ `Setx ] T.Lsrc.named -> T.Lsrc.t
     }
 
-  let seal_mapper (unsealed : mapper) : mapper_sealed =
+  let seal_mapper =
+   fun [@ocaml.inline always] (unsealed : mapper) : mapper_sealed ->
     let rec sealed =
       ({ t = (fun (input : T.Lsrc.t) -> (unsealed.t [@ocaml.inlined hint]) sealed input)
        ; t__if_1 =
@@ -534,7 +536,7 @@ module Map_Lsrc_Lsrc = struct
         : mapper_sealed)
     in
     sealed
-  ;;
+ ;;
 end
 
 (*$*)
