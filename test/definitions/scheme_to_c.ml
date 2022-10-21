@@ -75,4 +75,5 @@ let all =
 
 let mappers =
   [ "lsrc", "l1"
+  ; "lsrc", "lsrc"
   ] |> List.map ~f:(Tuple2.map ~f:Compile.Language_name.of_string)

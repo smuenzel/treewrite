@@ -1147,7 +1147,15 @@ module Synthesize = struct
     let self_type_sealed = ptyp_constr (Lident self_name_sealed) [] in
     let source = Map.find_exn t.languages source in
     let destination = Map.find_exn t.languages destination in
-    let make_record self_name self_type =
+    let open struct
+      type row =
+        { name : string
+        ; input : Parsetree.core_type
+        ; result : Parsetree.core_type
+        } 
+
+    end in
+    let rows =
       let direct_correspondence =
         Map.merge source.types_by_name destination.types_by_name
           ~f:(fun ~key m ->
@@ -1155,17 +1163,10 @@ module Synthesize = struct
               | `Left _ -> None
               | `Right _ -> None
               | `Both (t_source, t_destination) ->
-                let type_ =
-                  List.filter_opt
-                    [ self_type
-                    ; Some (All_types.With_shared.instantiate_defined_type all_types t_source)
-                    ; Some (All_types.With_shared.instantiate_defined_type all_types t_destination)
-                    ]
-                  |> ptyp_arrows
-                in
-                label_declaration
-                  ~type_
-                  (Defined_type_name.to_fun_name key)
+                { name = Defined_type_name.to_fun_name key
+                ; input = All_types.With_shared.instantiate_defined_type all_types t_source
+                ; result = All_types.With_shared.instantiate_defined_type all_types t_destination
+                }
                 |> Some
             )
       in
@@ -1196,26 +1197,35 @@ module Synthesize = struct
                             [ Constructor_name.variant_type constructor
                             ]
                         in
-                        let type_ =
-                          List.filter_opt
-                            [ self_type
-                            ; Some named_type
-                            ; Some destination
-                            ]
-                          |> ptyp_arrows
-                        in
-                        label_declaration
-                          ~type_
-                          (Defined_type_name.to_fun_name ~constructor key)
+                        { name = Defined_type_name.to_fun_name ~constructor key
+                        ; input = named_type
+                        ; result = destination
+                        }
                       )
                   |> Some
             )
       in
+      List.concat
+        [ Map.data direct_correspondence
+        ; Map.data direct_correspondence_constructor |> List.concat
+        ]
+    in
+    let make_record self_name self_type =
       let label_declarations =
-        List.concat
-          [ Map.data direct_correspondence
-          ; Map.data direct_correspondence_constructor |> List.concat
-          ]
+        List.map rows
+          ~f:(fun { name; input; result } ->
+              let type_ =
+                List.filter_opt
+                  [ self_type
+                  ; Some input
+                  ; Some result
+                  ]
+                |> ptyp_arrows
+              in
+              label_declaration
+                ~type_
+                name
+            )
       in
       let tdecl =
         type_declaration
