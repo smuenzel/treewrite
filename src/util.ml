@@ -98,8 +98,19 @@ module Ast_builder = struct
     { tdecl
       with ptype_attributes = [ attribute ~name:"ocaml.unboxed" ~payload:(PStr [])] }
 
+  let attr_string_payload s =
+    PStr [pstr_eval (pexp_constant (Pconst_string (s,Location.none,None))) []]
+
+  let attr_ident_payload s =
+    PStr [pstr_eval (pexp_ident (Lident s)) []]
+
+  let inlined_hint (exp : Parsetree.expression) =
+    { exp
+      with pexp_attributes = [ attribute ~name:"ocaml.inlined" ~payload:(attr_ident_payload "hint")]
+    }
+
   let allow_duplicate_attribute =
-    attribute ~name:"ocaml.warning" ~payload:(PStr [pstr_eval (pexp_constant (Pconst_string ("-30",Location.none,None))) []])
+    attribute ~name:"ocaml.warning" ~payload:(attr_string_payload "-30")
 
   let allow_duplicate_type (tdecl : Parsetree.type_declaration) =
     { tdecl

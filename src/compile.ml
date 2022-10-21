@@ -1143,7 +1143,9 @@ module Synthesize = struct
     let open Ast_builder in
     let all_types = Language_group.With_shared.all_types t in
     let self_name = "mapper" in
-    let self_name_sealed = "mapper_sealed" in
+    let self_name_sealed = self_name ^ "_sealed" in
+    let sealer_name = "seal_" ^ self_name in
+    let self_type = ptyp_constr (Lident self_name) [] in
     let self_type_sealed = ptyp_constr (Lident self_name_sealed) [] in
     let source = Map.find_exn t.languages source in
     let destination = Map.find_exn t.languages destination in
@@ -1153,7 +1155,6 @@ module Synthesize = struct
         ; input : Parsetree.core_type
         ; result : Parsetree.core_type
         } 
-
     end in
     let rows =
       let direct_correspondence =
@@ -1234,11 +1235,56 @@ module Synthesize = struct
       in
       tdecl
     in
-    pstr_type
-      Recursive
-      [ make_record self_name (Some self_type_sealed)
-      ; make_record self_name_sealed None
-      ]
+    let sealer =
+      let unsealed = Longident.Lident "unsealed" in
+      let sealed = Longident.Lident "sealed" in
+      let entries =
+        List.map rows
+          ~f:(fun {name; input; result = _} ->
+              let field_name = Location.mknoloc (Longident.Lident name) in
+              let eval_fun =
+                pexp_apply
+                  (inlined_hint (pexp_field (pexp_construct unsealed None) field_name))
+                  [ Nolabel, pexp_construct sealed None
+                  ; Nolabel, pexp_construct (Lident "input") None
+                  ]
+              in
+              field_name
+            , pexp_fun
+                Nolabel
+                None
+                (ppat_constraint (ppat_construct (Lident "input") None) input)
+                eval_fun
+            )
+      in
+      let sealing_expr =
+        pexp_constraint (pexp_record entries None) self_type_sealed
+      in
+      let sealing_expr =
+        pexp_let Recursive
+          [ value_binding ~pat:(ppat_construct sealed None) ~expr:sealing_expr
+          ]
+          (pexp_ident sealed)
+      in
+      let pat = ppat_construct (Lident sealer_name) None in
+      let expr =
+        pexp_fun 
+          Nolabel
+          None
+          (ppat_constraint (ppat_construct unsealed None) self_type)
+          (pexp_constraint sealing_expr self_type_sealed)
+      in
+      pstr_value Nonrecursive
+        [ value_binding ~pat ~expr
+        ]
+    in
+    [ pstr_type
+        Recursive
+        [ make_record self_name (Some self_type_sealed)
+        ; make_record self_name_sealed None
+        ]
+    ; sealer
+    ]
 
   let make_mappers t mappers =
     let open Ast_builder in
@@ -1249,9 +1295,10 @@ module Synthesize = struct
             |> Module_name.to_string
           in
           let structure =
-            [ pstr_attribute allow_duplicate_attribute
-            ; mapper_type t ~source ~destination
-            ]
+            List.concat
+              [ [ pstr_attribute allow_duplicate_attribute ]
+              ; mapper_type t ~source ~destination
+              ]
           in
           let expr = pmod_structure structure in
           pstr_module

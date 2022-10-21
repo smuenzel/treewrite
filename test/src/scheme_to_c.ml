@@ -340,6 +340,75 @@ module Map_Lsrc_L1 = struct
     ; t'Letrec : [ `Letrec ] T.Lsrc.named -> T.L1.t
     ; t'Setx : [ `Setx ] T.Lsrc.named -> T.L1.t
     }
+
+  let seal_mapper (unsealed : mapper) : mapper_sealed =
+    let rec sealed =
+      ({ t = (fun (input : T.Lsrc.t) -> (unsealed.t [@ocaml.inlined hint]) sealed input)
+       ; t__if_2 =
+           (fun (input : T.If_2.Lsrc.t) ->
+             (unsealed.t__if_2 [@ocaml.inlined hint]) sealed input)
+       ; t__lambda =
+           (fun (input : T.Lambda.Lsrc.t) ->
+             (unsealed.t__lambda [@ocaml.inlined hint]) sealed input)
+       ; t__let =
+           (fun (input : T.Let.Lsrc.t) ->
+             (unsealed.t__let [@ocaml.inlined hint]) sealed input)
+       ; t__letrec =
+           (fun (input : T.Letrec.Lsrc.t) ->
+             (unsealed.t__letrec [@ocaml.inlined hint]) sealed input)
+       ; t__setx =
+           (fun (input : T.Setx.Lsrc.t) ->
+             (unsealed.t__setx [@ocaml.inlined hint]) sealed input)
+       ; var_definition =
+           (fun (input : Var_definition.Lsrc.t) ->
+             (unsealed.var_definition [@ocaml.inlined hint]) sealed input)
+       ; t'Symbol =
+           (fun (input : [ `Symbol ] T.Lsrc.named) ->
+             (unsealed.t'Symbol [@ocaml.inlined hint]) sealed input)
+       ; t'Primitive =
+           (fun (input : [ `Primitive ] T.Lsrc.named) ->
+             (unsealed.t'Primitive [@ocaml.inlined hint]) sealed input)
+       ; t'Constant =
+           (fun (input : [ `Constant ] T.Lsrc.named) ->
+             (unsealed.t'Constant [@ocaml.inlined hint]) sealed input)
+       ; t'Quote =
+           (fun (input : [ `Quote ] T.Lsrc.named) ->
+             (unsealed.t'Quote [@ocaml.inlined hint]) sealed input)
+       ; t'If_1 =
+           (fun (input : [ `If_1 ] T.Lsrc.named) ->
+             (unsealed.t'If_1 [@ocaml.inlined hint]) sealed input)
+       ; t'If_2 =
+           (fun (input : [ `If_2 ] T.Lsrc.named) ->
+             (unsealed.t'If_2 [@ocaml.inlined hint]) sealed input)
+       ; t'Or =
+           (fun (input : [ `Or ] T.Lsrc.named) ->
+             (unsealed.t'Or [@ocaml.inlined hint]) sealed input)
+       ; t'And =
+           (fun (input : [ `And ] T.Lsrc.named) ->
+             (unsealed.t'And [@ocaml.inlined hint]) sealed input)
+       ; t'Not =
+           (fun (input : [ `Not ] T.Lsrc.named) ->
+             (unsealed.t'Not [@ocaml.inlined hint]) sealed input)
+       ; t'Begin =
+           (fun (input : [ `Begin ] T.Lsrc.named) ->
+             (unsealed.t'Begin [@ocaml.inlined hint]) sealed input)
+       ; t'Lambda =
+           (fun (input : [ `Lambda ] T.Lsrc.named) ->
+             (unsealed.t'Lambda [@ocaml.inlined hint]) sealed input)
+       ; t'Let =
+           (fun (input : [ `Let ] T.Lsrc.named) ->
+             (unsealed.t'Let [@ocaml.inlined hint]) sealed input)
+       ; t'Letrec =
+           (fun (input : [ `Letrec ] T.Lsrc.named) ->
+             (unsealed.t'Letrec [@ocaml.inlined hint]) sealed input)
+       ; t'Setx =
+           (fun (input : [ `Setx ] T.Lsrc.named) ->
+             (unsealed.t'Setx [@ocaml.inlined hint]) sealed input)
+       }
+        : mapper_sealed)
+    in
+    sealed
+  ;;
 end
 
 module Map_Lsrc_Lsrc = struct
@@ -394,6 +463,78 @@ module Map_Lsrc_Lsrc = struct
     ; t'Letrec : [ `Letrec ] T.Lsrc.named -> T.Lsrc.t
     ; t'Setx : [ `Setx ] T.Lsrc.named -> T.Lsrc.t
     }
+
+  let seal_mapper (unsealed : mapper) : mapper_sealed =
+    let rec sealed =
+      ({ t = (fun (input : T.Lsrc.t) -> (unsealed.t [@ocaml.inlined hint]) sealed input)
+       ; t__if_1 =
+           (fun (input : T.If_1.Lsrc.t) ->
+             (unsealed.t__if_1 [@ocaml.inlined hint]) sealed input)
+       ; t__if_2 =
+           (fun (input : T.If_2.Lsrc.t) ->
+             (unsealed.t__if_2 [@ocaml.inlined hint]) sealed input)
+       ; t__lambda =
+           (fun (input : T.Lambda.Lsrc.t) ->
+             (unsealed.t__lambda [@ocaml.inlined hint]) sealed input)
+       ; t__let =
+           (fun (input : T.Let.Lsrc.t) ->
+             (unsealed.t__let [@ocaml.inlined hint]) sealed input)
+       ; t__letrec =
+           (fun (input : T.Letrec.Lsrc.t) ->
+             (unsealed.t__letrec [@ocaml.inlined hint]) sealed input)
+       ; t__setx =
+           (fun (input : T.Setx.Lsrc.t) ->
+             (unsealed.t__setx [@ocaml.inlined hint]) sealed input)
+       ; var_definition =
+           (fun (input : Var_definition.Lsrc.t) ->
+             (unsealed.var_definition [@ocaml.inlined hint]) sealed input)
+       ; t'Symbol =
+           (fun (input : [ `Symbol ] T.Lsrc.named) ->
+             (unsealed.t'Symbol [@ocaml.inlined hint]) sealed input)
+       ; t'Primitive =
+           (fun (input : [ `Primitive ] T.Lsrc.named) ->
+             (unsealed.t'Primitive [@ocaml.inlined hint]) sealed input)
+       ; t'Constant =
+           (fun (input : [ `Constant ] T.Lsrc.named) ->
+             (unsealed.t'Constant [@ocaml.inlined hint]) sealed input)
+       ; t'Quote =
+           (fun (input : [ `Quote ] T.Lsrc.named) ->
+             (unsealed.t'Quote [@ocaml.inlined hint]) sealed input)
+       ; t'If_1 =
+           (fun (input : [ `If_1 ] T.Lsrc.named) ->
+             (unsealed.t'If_1 [@ocaml.inlined hint]) sealed input)
+       ; t'If_2 =
+           (fun (input : [ `If_2 ] T.Lsrc.named) ->
+             (unsealed.t'If_2 [@ocaml.inlined hint]) sealed input)
+       ; t'Or =
+           (fun (input : [ `Or ] T.Lsrc.named) ->
+             (unsealed.t'Or [@ocaml.inlined hint]) sealed input)
+       ; t'And =
+           (fun (input : [ `And ] T.Lsrc.named) ->
+             (unsealed.t'And [@ocaml.inlined hint]) sealed input)
+       ; t'Not =
+           (fun (input : [ `Not ] T.Lsrc.named) ->
+             (unsealed.t'Not [@ocaml.inlined hint]) sealed input)
+       ; t'Begin =
+           (fun (input : [ `Begin ] T.Lsrc.named) ->
+             (unsealed.t'Begin [@ocaml.inlined hint]) sealed input)
+       ; t'Lambda =
+           (fun (input : [ `Lambda ] T.Lsrc.named) ->
+             (unsealed.t'Lambda [@ocaml.inlined hint]) sealed input)
+       ; t'Let =
+           (fun (input : [ `Let ] T.Lsrc.named) ->
+             (unsealed.t'Let [@ocaml.inlined hint]) sealed input)
+       ; t'Letrec =
+           (fun (input : [ `Letrec ] T.Lsrc.named) ->
+             (unsealed.t'Letrec [@ocaml.inlined hint]) sealed input)
+       ; t'Setx =
+           (fun (input : [ `Setx ] T.Lsrc.named) ->
+             (unsealed.t'Setx [@ocaml.inlined hint]) sealed input)
+       }
+        : mapper_sealed)
+    in
+    sealed
+  ;;
 end
 
 (*$*)
