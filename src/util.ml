@@ -97,6 +97,14 @@ module Ast_builder = struct
   let unbox_type (tdecl : Parsetree.type_declaration) =
     { tdecl
       with ptype_attributes = [ attribute ~name:"ocaml.unboxed" ~payload:(PStr [])] }
+
+  let allow_duplicate_attribute =
+    attribute ~name:"ocaml.warning" ~payload:(PStr [pstr_eval (pexp_constant (Pconst_string ("-30",Location.none,None))) []])
+
+  let allow_duplicate_type (tdecl : Parsetree.type_declaration) =
+    { tdecl
+      with ptype_attributes = [ allow_duplicate_attribute ]
+    }
 end
 
 let map_to_list_rev ~f map =

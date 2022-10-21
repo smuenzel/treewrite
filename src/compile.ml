@@ -1143,84 +1143,91 @@ module Synthesize = struct
     let open Ast_builder in
     let all_types = Language_group.With_shared.all_types t in
     let self_name = "mapper" in
-    let self_type = ptyp_constr (Lident self_name) [] in
+    let self_name_sealed = "mapper_sealed" in
+    let self_type_sealed = ptyp_constr (Lident self_name_sealed) [] in
     let source = Map.find_exn t.languages source in
     let destination = Map.find_exn t.languages destination in
-    let direct_correspondence =
-      Map.merge source.types_by_name destination.types_by_name
-        ~f:(fun ~key m ->
-            match m with
-            | `Left _ -> None
-            | `Right _ -> None
-            | `Both (t_source, t_destination) ->
-              let type_ =
-                ptyp_arrows
-                  [ self_type
-                  ; All_types.With_shared.instantiate_defined_type all_types t_source
-                  ; All_types.With_shared.instantiate_defined_type all_types t_destination
-                  ]
-              in
-              label_declaration
-                ~type_
-                (Defined_type_name.to_fun_name key)
-              |> Some
-          )
-    in
-    let direct_correspondence_constructor =
-      Map.merge source.types_by_name destination.types_by_name
-        ~f:(fun ~key m ->
-            match m with
-            | `Left _ -> None
-            | `Right _ -> None
-            | `Both (t_source, t_destination) ->
-              let t_source = Map.find_exn source.types_by_id t_source in
-              let destination =
-                All_types.With_shared.instantiate_defined_type all_types t_destination
-              in
-              match t_source with
-              | Record _ | Shared _ -> None
-              | Variant constructors ->
-                List.map constructors
-                  ~f:(fun (constructor, _) ->
-                      let named_type =
-                        (* CR smuenzel: need function for this *)
-                        ptyp_constr
-                          (Defined_type_name.ident_in_language
-                             key
-                             ~language_name:source.name
-                             ~t_name:"named"
-                          )
-                          [ Constructor_name.variant_type constructor
-                          ]
-                      in
-                      let type_ =
-                        ptyp_arrows
-                          [ self_type
-                          ; named_type
-                          ; destination
-                          ]
-                      in
-                      label_declaration
-                        ~type_
-                        (Defined_type_name.to_fun_name ~constructor key)
-                    )
+    let make_record self_name self_type =
+      let direct_correspondence =
+        Map.merge source.types_by_name destination.types_by_name
+          ~f:(fun ~key m ->
+              match m with
+              | `Left _ -> None
+              | `Right _ -> None
+              | `Both (t_source, t_destination) ->
+                let type_ =
+                  List.filter_opt
+                    [ self_type
+                    ; Some (All_types.With_shared.instantiate_defined_type all_types t_source)
+                    ; Some (All_types.With_shared.instantiate_defined_type all_types t_destination)
+                    ]
+                  |> ptyp_arrows
+                in
+                label_declaration
+                  ~type_
+                  (Defined_type_name.to_fun_name key)
                 |> Some
-          )
-    in
-    let label_declarations =
-      List.concat
-        [ Map.data direct_correspondence
-        ; Map.data direct_correspondence_constructor |> List.concat
-        ]
-    in
-    let tdecl =
-      type_declaration
-        self_name
-        ~kind:(Ptype_record label_declarations)
+            )
+      in
+      let direct_correspondence_constructor =
+        Map.merge source.types_by_name destination.types_by_name
+          ~f:(fun ~key m ->
+              match m with
+              | `Left _ -> None
+              | `Right _ -> None
+              | `Both (t_source, t_destination) ->
+                let t_source = Map.find_exn source.types_by_id t_source in
+                let destination =
+                  All_types.With_shared.instantiate_defined_type all_types t_destination
+                in
+                match t_source with
+                | Record _ | Shared _ -> None
+                | Variant constructors ->
+                  List.map constructors
+                    ~f:(fun (constructor, _) ->
+                        let named_type =
+                          (* CR smuenzel: need function for this *)
+                          ptyp_constr
+                            (Defined_type_name.ident_in_language
+                               key
+                               ~language_name:source.name
+                               ~t_name:"named"
+                            )
+                            [ Constructor_name.variant_type constructor
+                            ]
+                        in
+                        let type_ =
+                          List.filter_opt
+                            [ self_type
+                            ; Some named_type
+                            ; Some destination
+                            ]
+                          |> ptyp_arrows
+                        in
+                        label_declaration
+                          ~type_
+                          (Defined_type_name.to_fun_name ~constructor key)
+                      )
+                  |> Some
+            )
+      in
+      let label_declarations =
+        List.concat
+          [ Map.data direct_correspondence
+          ; Map.data direct_correspondence_constructor |> List.concat
+          ]
+      in
+      let tdecl =
+        type_declaration
+          self_name
+          ~kind:(Ptype_record label_declarations)
+      in
+      tdecl
     in
     pstr_type
       Recursive
-      [ tdecl
+      [ make_record self_name (Some self_type_sealed)
+      ; make_record self_name_sealed None
       ]
 
   let make_mappers t mappers =
@@ -1232,7 +1239,8 @@ module Synthesize = struct
             |> Module_name.to_string
           in
           let structure =
-            [ mapper_type t ~source ~destination
+            [ pstr_attribute allow_duplicate_attribute
+            ; mapper_type t ~source ~destination
             ]
           in
           let expr = pmod_structure structure in

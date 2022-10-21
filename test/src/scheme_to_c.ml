@@ -291,28 +291,54 @@ module Var_definition = struct
 end
 
 module Map_Lsrc_L1 = struct
+  [@@@ocaml.warning "-30"]
+
   type mapper =
-    { t : mapper -> T.Lsrc.t -> T.L1.t
-    ; t__if_2 : mapper -> T.If_2.Lsrc.t -> T.If_2.L1.t
-    ; t__lambda : mapper -> T.Lambda.Lsrc.t -> T.Lambda.L1.t
-    ; t__let : mapper -> T.Let.Lsrc.t -> T.Let.L1.t
-    ; t__letrec : mapper -> T.Letrec.Lsrc.t -> T.Letrec.L1.t
-    ; t__setx : mapper -> T.Setx.Lsrc.t -> T.Setx.L1.t
-    ; var_definition : mapper -> Var_definition.Lsrc.t -> Var_definition.L1.t
-    ; t'Symbol : mapper -> [ `Symbol ] T.Lsrc.named -> T.L1.t
-    ; t'Primitive : mapper -> [ `Primitive ] T.Lsrc.named -> T.L1.t
-    ; t'Constant : mapper -> [ `Constant ] T.Lsrc.named -> T.L1.t
-    ; t'Quote : mapper -> [ `Quote ] T.Lsrc.named -> T.L1.t
-    ; t'If_1 : mapper -> [ `If_1 ] T.Lsrc.named -> T.L1.t
-    ; t'If_2 : mapper -> [ `If_2 ] T.Lsrc.named -> T.L1.t
-    ; t'Or : mapper -> [ `Or ] T.Lsrc.named -> T.L1.t
-    ; t'And : mapper -> [ `And ] T.Lsrc.named -> T.L1.t
-    ; t'Not : mapper -> [ `Not ] T.Lsrc.named -> T.L1.t
-    ; t'Begin : mapper -> [ `Begin ] T.Lsrc.named -> T.L1.t
-    ; t'Lambda : mapper -> [ `Lambda ] T.Lsrc.named -> T.L1.t
-    ; t'Let : mapper -> [ `Let ] T.Lsrc.named -> T.L1.t
-    ; t'Letrec : mapper -> [ `Letrec ] T.Lsrc.named -> T.L1.t
-    ; t'Setx : mapper -> [ `Setx ] T.Lsrc.named -> T.L1.t
+    { t : mapper_sealed -> T.Lsrc.t -> T.L1.t
+    ; t__if_2 : mapper_sealed -> T.If_2.Lsrc.t -> T.If_2.L1.t
+    ; t__lambda : mapper_sealed -> T.Lambda.Lsrc.t -> T.Lambda.L1.t
+    ; t__let : mapper_sealed -> T.Let.Lsrc.t -> T.Let.L1.t
+    ; t__letrec : mapper_sealed -> T.Letrec.Lsrc.t -> T.Letrec.L1.t
+    ; t__setx : mapper_sealed -> T.Setx.Lsrc.t -> T.Setx.L1.t
+    ; var_definition : mapper_sealed -> Var_definition.Lsrc.t -> Var_definition.L1.t
+    ; t'Symbol : mapper_sealed -> [ `Symbol ] T.Lsrc.named -> T.L1.t
+    ; t'Primitive : mapper_sealed -> [ `Primitive ] T.Lsrc.named -> T.L1.t
+    ; t'Constant : mapper_sealed -> [ `Constant ] T.Lsrc.named -> T.L1.t
+    ; t'Quote : mapper_sealed -> [ `Quote ] T.Lsrc.named -> T.L1.t
+    ; t'If_1 : mapper_sealed -> [ `If_1 ] T.Lsrc.named -> T.L1.t
+    ; t'If_2 : mapper_sealed -> [ `If_2 ] T.Lsrc.named -> T.L1.t
+    ; t'Or : mapper_sealed -> [ `Or ] T.Lsrc.named -> T.L1.t
+    ; t'And : mapper_sealed -> [ `And ] T.Lsrc.named -> T.L1.t
+    ; t'Not : mapper_sealed -> [ `Not ] T.Lsrc.named -> T.L1.t
+    ; t'Begin : mapper_sealed -> [ `Begin ] T.Lsrc.named -> T.L1.t
+    ; t'Lambda : mapper_sealed -> [ `Lambda ] T.Lsrc.named -> T.L1.t
+    ; t'Let : mapper_sealed -> [ `Let ] T.Lsrc.named -> T.L1.t
+    ; t'Letrec : mapper_sealed -> [ `Letrec ] T.Lsrc.named -> T.L1.t
+    ; t'Setx : mapper_sealed -> [ `Setx ] T.Lsrc.named -> T.L1.t
+    }
+
+  and mapper_sealed =
+    { t : T.Lsrc.t -> T.L1.t
+    ; t__if_2 : T.If_2.Lsrc.t -> T.If_2.L1.t
+    ; t__lambda : T.Lambda.Lsrc.t -> T.Lambda.L1.t
+    ; t__let : T.Let.Lsrc.t -> T.Let.L1.t
+    ; t__letrec : T.Letrec.Lsrc.t -> T.Letrec.L1.t
+    ; t__setx : T.Setx.Lsrc.t -> T.Setx.L1.t
+    ; var_definition : Var_definition.Lsrc.t -> Var_definition.L1.t
+    ; t'Symbol : [ `Symbol ] T.Lsrc.named -> T.L1.t
+    ; t'Primitive : [ `Primitive ] T.Lsrc.named -> T.L1.t
+    ; t'Constant : [ `Constant ] T.Lsrc.named -> T.L1.t
+    ; t'Quote : [ `Quote ] T.Lsrc.named -> T.L1.t
+    ; t'If_1 : [ `If_1 ] T.Lsrc.named -> T.L1.t
+    ; t'If_2 : [ `If_2 ] T.Lsrc.named -> T.L1.t
+    ; t'Or : [ `Or ] T.Lsrc.named -> T.L1.t
+    ; t'And : [ `And ] T.Lsrc.named -> T.L1.t
+    ; t'Not : [ `Not ] T.Lsrc.named -> T.L1.t
+    ; t'Begin : [ `Begin ] T.Lsrc.named -> T.L1.t
+    ; t'Lambda : [ `Lambda ] T.Lsrc.named -> T.L1.t
+    ; t'Let : [ `Let ] T.Lsrc.named -> T.L1.t
+    ; t'Letrec : [ `Letrec ] T.Lsrc.named -> T.L1.t
+    ; t'Setx : [ `Setx ] T.Lsrc.named -> T.L1.t
     }
 end
 
