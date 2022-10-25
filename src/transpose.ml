@@ -40,11 +40,11 @@ let sel3_cmp
     (type a b c r a' b' c' r')
     (selector : ((a * a') * (b * b') * (c * c'), (r * r')) sel3)
     ((a,b,c) :
-       ( (a, a') Core.Map.comparator
-         * (b, b') Core.Map.comparator
-         * (c, c') Core.Map.comparator
+       ( (a, a') Comparator.Module.t
+         * (b, b') Comparator.Module.t
+         * (c, c') Comparator.Module.t
        ))
-  : (r, r') Core.Map.comparator
+  : (r, r') Comparator.Module.t
   =
   match selector with
   | S1 -> a
