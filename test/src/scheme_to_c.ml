@@ -17,7 +17,7 @@ end
 
   let () =
     Treewrite_test_definitions.Scheme_to_c.all
-    |> Compile.Synthesize.synth
+    |> Synthesize.synth
       ~mappers:Treewrite_test_definitions.Scheme_to_c.mappers
     |> Code_formatter.structure
     |> print_endline
