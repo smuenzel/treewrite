@@ -305,17 +305,25 @@ let nonrec_module t =
   List.concat mat
 
 module Arrow = struct
-  type 'a t =
+  type ('a, 'b) t =
     { source : 'a
-    ; destination : 'a
+    ; destination : 'b
     }
+
+  type 'a t' = ('a, 'a) t
 end
 
 module Mapper_row = struct
+  module Kind = struct
+    type t =
+      | Defined of Defined_type_id.t Arrow.t'
+      | Constructor of (Defined_type_id.t * Constructor_name.t, Defined_type_id.t) Arrow.t
+  end
 
   type t =
     { name : string
-    ; core_type_mapping : Parsetree.core_type Arrow.t
+    ; kind : Kind.t
+    ; core_type_mapping : Parsetree.core_type Arrow.t'
     } 
 
   let make (t : Language_group.With_shared.t) ~source ~destination =
@@ -332,6 +340,7 @@ module Mapper_row = struct
               | `Right _ -> None
               | `Both (t_source, t_destination) ->
                 { name = Defined_type_name.to_fun_name key
+                ; kind = Defined { source = t_source; destination = t_destination }
                 ; core_type_mapping =
                     { source = All_types.With_shared.instantiate_defined_type all_types t_source
                     ; destination = All_types.With_shared.instantiate_defined_type all_types t_destination
@@ -346,8 +355,8 @@ module Mapper_row = struct
               match m with
               | `Left _ -> None
               | `Right _ -> None
-              | `Both (t_source, t_destination) ->
-                let t_source = Map.find_exn source.types_by_id t_source in
+              | `Both (t_source_id, t_destination) ->
+                let t_source = Map.find_exn source.types_by_id t_source_id in
                 let destination =
                   All_types.With_shared.instantiate_defined_type all_types t_destination
                 in
@@ -368,6 +377,11 @@ module Mapper_row = struct
                             ]
                         in
                         { name = Defined_type_name.to_fun_name ~constructor key
+                        ; kind =
+                            Constructor
+                              { source = t_source_id, constructor
+                              ; destination = t_destination
+                              }
                         ; core_type_mapping =
                             { source = named_type
                             ; destination
@@ -397,7 +411,10 @@ let mapper_type (t : Language_group.With_shared.t) ~source ~destination =
   let make_record self_name self_type =
     let label_declarations =
       List.map rows
-        ~f:(fun { name; core_type_mapping = { source; destination } } ->
+        ~f:(fun { name
+                ; core_type_mapping = { source; destination }
+                ; kind = _
+                } ->
             let type_ =
               List.filter_opt
                 [ self_type
@@ -423,7 +440,10 @@ let mapper_type (t : Language_group.With_shared.t) ~source ~destination =
     let sealed = Longident.Lident "sealed" in
     let entries =
       List.map rows
-        ~f:(fun {name; core_type_mapping = { source; _ }} ->
+        ~f:(fun { name
+                ; core_type_mapping = { source; _ }
+                ; kind = _
+                } ->
             let field_name = Location.mknoloc (Longident.Lident name) in
             let eval_fun =
               pexp_apply

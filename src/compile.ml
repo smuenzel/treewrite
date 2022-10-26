@@ -112,11 +112,9 @@ module Type_id = struct
     | Defined of Defined_type_id.t
   [@@deriving sexp]
 
-  (*
   let all_external_types = function
     | External id -> External_type_id.Set.singleton id
     | Defined _ -> External_type_id.Set.empty
-     *)
 
   let replace_external_ids mapping t =
     match t with
@@ -192,9 +190,7 @@ module Type_instance = struct
   type t = Type_id.t General.t [@@deriving sexp]
   (* Parameters must be instantiated for now *)
 
-  (*
   let all_external_types (t : t) = Type_id.all_external_types t.id
-     *)
 
   let rec replace_external_ids mapping (t : t) : t =
     let parameters = List.map t.parameters ~f:(replace_external_ids mapping) in
@@ -215,7 +211,6 @@ module Type_shape = struct
       | Variant of (Constructor_name.t * 'instance list) list
     [@@deriving sexp]
 
-    (*
     let all_external_types t ~external_types_of_instance =
       match t with
       | Record r ->
@@ -237,7 +232,6 @@ module Type_shape = struct
               )
         in
         gather v
-       *)
 
   end
 
@@ -248,19 +242,30 @@ module Type_shape = struct
       | Shared of Shared_type_id.t
     [@@deriving sexp]
 
-    let of_general : _ General.t -> _ t= function
+    let of_general : _ General.t -> _ t = function
       | Record x -> Record x
       | Variant x -> Variant x
+
+    let all_external_types t =
+      let as_general =
+        match t with
+        | Record x -> Some (General.Record x)
+        | Variant x -> Some (General.Variant x)
+        | Shared _ -> None
+      in
+      match as_general with
+      | None -> External_type_id.Set.empty
+      | Some t ->
+        General.all_external_types t
+          ~external_types_of_instance:Type_instance.all_external_types
   end
 
   type t = Type_instance.t General.t
   [@@deriving sexp]
 
-  (*
   let all_external_types t =
     General.all_external_types t
       ~external_types_of_instance:Type_instance.all_external_types
-     *)
 
   let replace_external_ids (t : t) mapping : t =
     match t with
@@ -452,6 +457,19 @@ module Language_definition = struct
             | Variant _ -> None
             | Shared shared -> Some shared
           )
+
+
+    let all_external_types t : External_type_id.Set.t =
+      Fields.Direct.fold t
+        ~init:External_type_id.Set.empty
+        ~name:(fun acc _ _ _ -> acc)
+        ~types_by_name:(fun acc _ _ _ -> acc)
+        ~types_by_id:(fun acc _ _ defined_types ->
+            Map.fold ~init:acc defined_types
+              ~f:(fun ~key:_ ~data:type_shape acc ->
+                  Set.union acc (Type_shape.With_shared.all_external_types type_shape)
+                )
+          )
   end
 
 
@@ -463,20 +481,6 @@ module Language_definition = struct
           )
     in
     { t with types_by_id }
-
-  (*
-  let all_external_types t : External_type_id.Set.t =
-    Fields.Direct.fold t
-      ~init:External_type_id.Set.empty
-      ~name:(fun acc _ _ _ -> acc)
-      ~types_by_name:(fun acc _ _ _ -> acc)
-      ~types_by_id:(fun acc _ _ defined_types ->
-          Map.fold ~init:acc defined_types
-            ~f:(fun ~key:_ ~data:type_shape acc ->
-                Set.union acc (Type_shape.all_external_types type_shape)
-              )
-        )
-     *)
 
   let all_record_descriptions t =
     Map.filter_map t.types_by_name

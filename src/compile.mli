@@ -98,6 +98,8 @@ module Type_shape : sig
   type t = Type_instance.t General.t
   [@@deriving sexp]
 
+  val all_external_types : t -> External_type_id.Set.t
+
   module With_shared : sig
     type 'instance t =
       | Record of (Record_label.t * 'instance) list
@@ -133,6 +135,8 @@ module Language_definition : sig
       ; types_by_name : Defined_type_id.t Defined_type_name.Map.t
       ; types_by_id : Type_instance.t Type_shape.With_shared.t Defined_type_id.Map.t
       } [@@deriving sexp, fields]
+
+    val all_external_types : t -> External_type_id.Set.t
   end
 end
 
