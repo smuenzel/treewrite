@@ -304,87 +304,105 @@ let nonrec_module t =
   in
   List.concat mat
 
+module Arrow = struct
+  type 'a t =
+    { source : 'a
+    ; destination : 'a
+    }
+end
+
+module Mapper_row = struct
+
+  type t =
+    { name : string
+    ; core_type_mapping : Parsetree.core_type Arrow.t
+    } 
+
+  let make (t : Language_group.With_shared.t) ~source ~destination =
+    let open Ast_builder in
+    let all_types = Language_group.With_shared.all_types t in
+    let source = Map.find_exn t.languages source in
+    let destination = Map.find_exn t.languages destination in
+    let rows =
+      let direct_correspondence =
+        Map.merge source.types_by_name destination.types_by_name
+          ~f:(fun ~key m ->
+              match m with
+              | `Left _ -> None
+              | `Right _ -> None
+              | `Both (t_source, t_destination) ->
+                { name = Defined_type_name.to_fun_name key
+                ; core_type_mapping =
+                    { source = All_types.With_shared.instantiate_defined_type all_types t_source
+                    ; destination = All_types.With_shared.instantiate_defined_type all_types t_destination
+                    }
+                }
+                |> Some
+            )
+      in
+      let direct_correspondence_constructor =
+        Map.merge source.types_by_name destination.types_by_name
+          ~f:(fun ~key m ->
+              match m with
+              | `Left _ -> None
+              | `Right _ -> None
+              | `Both (t_source, t_destination) ->
+                let t_source = Map.find_exn source.types_by_id t_source in
+                let destination =
+                  All_types.With_shared.instantiate_defined_type all_types t_destination
+                in
+                match t_source with
+                | Record _ | Shared _ -> None
+                | Variant constructors ->
+                  List.map constructors
+                    ~f:(fun (constructor, _) ->
+                        let named_type =
+                          (* CR smuenzel: need function for this *)
+                          ptyp_constr
+                            (Defined_type_name.ident_in_language
+                               key
+                               ~language_name:source.name
+                               ~t_name:"named"
+                            )
+                            [ Constructor_name.variant_type constructor
+                            ]
+                        in
+                        { name = Defined_type_name.to_fun_name ~constructor key
+                        ; core_type_mapping =
+                            { source = named_type
+                            ; destination
+                            }
+                        }
+                      )
+                  |> Some
+            )
+      in
+      List.concat
+        [ Map.data direct_correspondence
+        ; Map.data direct_correspondence_constructor |> List.concat
+        ]
+    in
+    rows
+
+end
+
 let mapper_type (t : Language_group.With_shared.t) ~source ~destination =
+  let rows = Mapper_row.make t ~source ~destination in
   let open Ast_builder in
-  let all_types = Language_group.With_shared.all_types t in
   let self_name = "mapper" in
   let self_name_sealed = self_name ^ "_sealed" in
   let sealer_name = "seal_" ^ self_name in
   let self_type = ptyp_constr (Lident self_name) [] in
   let self_type_sealed = ptyp_constr (Lident self_name_sealed) [] in
-  let source = Map.find_exn t.languages source in
-  let destination = Map.find_exn t.languages destination in
-  let open struct
-    type row =
-      { name : string
-      ; input : Parsetree.core_type
-      ; result : Parsetree.core_type
-      } 
-  end in
-  let rows =
-    let direct_correspondence =
-      Map.merge source.types_by_name destination.types_by_name
-        ~f:(fun ~key m ->
-            match m with
-            | `Left _ -> None
-            | `Right _ -> None
-            | `Both (t_source, t_destination) ->
-              { name = Defined_type_name.to_fun_name key
-              ; input = All_types.With_shared.instantiate_defined_type all_types t_source
-              ; result = All_types.With_shared.instantiate_defined_type all_types t_destination
-              }
-              |> Some
-          )
-    in
-    let direct_correspondence_constructor =
-      Map.merge source.types_by_name destination.types_by_name
-        ~f:(fun ~key m ->
-            match m with
-            | `Left _ -> None
-            | `Right _ -> None
-            | `Both (t_source, t_destination) ->
-              let t_source = Map.find_exn source.types_by_id t_source in
-              let destination =
-                All_types.With_shared.instantiate_defined_type all_types t_destination
-              in
-              match t_source with
-              | Record _ | Shared _ -> None
-              | Variant constructors ->
-                List.map constructors
-                  ~f:(fun (constructor, _) ->
-                      let named_type =
-                        (* CR smuenzel: need function for this *)
-                        ptyp_constr
-                          (Defined_type_name.ident_in_language
-                             key
-                             ~language_name:source.name
-                             ~t_name:"named"
-                          )
-                          [ Constructor_name.variant_type constructor
-                          ]
-                      in
-                      { name = Defined_type_name.to_fun_name ~constructor key
-                      ; input = named_type
-                      ; result = destination
-                      }
-                    )
-                |> Some
-          )
-    in
-    List.concat
-      [ Map.data direct_correspondence
-      ; Map.data direct_correspondence_constructor |> List.concat
-      ]
-  in
   let make_record self_name self_type =
     let label_declarations =
       List.map rows
-        ~f:(fun { name; input; result } ->
+        ~f:(fun { name; core_type_mapping = { source; destination } } ->
             let type_ =
               List.filter_opt
                 [ self_type
-                ; Some input
-                ; Some result
+                ; Some source
+                ; Some destination
                 ]
               |> ptyp_arrows
             in
@@ -405,7 +423,7 @@ let mapper_type (t : Language_group.With_shared.t) ~source ~destination =
     let sealed = Longident.Lident "sealed" in
     let entries =
       List.map rows
-        ~f:(fun {name; input; result = _} ->
+        ~f:(fun {name; core_type_mapping = { source; _ }} ->
             let field_name = Location.mknoloc (Longident.Lident name) in
             let eval_fun =
               pexp_apply
@@ -418,7 +436,7 @@ let mapper_type (t : Language_group.With_shared.t) ~source ~destination =
           , pexp_fun
               Nolabel
               None
-              (ppat_constraint (ppat_construct (Lident "input") None) input)
+              (ppat_constraint (ppat_construct (Lident "input") None) source)
               eval_fun
           )
     in
